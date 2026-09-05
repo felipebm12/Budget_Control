@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+import sys
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -26,11 +27,18 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+_DIR_PYTHON = Path(__file__).resolve().parent.parent / "python sections"
+if str(_DIR_PYTHON) not in sys.path:
+    sys.path.insert(0, str(_DIR_PYTHON))
+from pdf_fonts import FONT, FONT_BOLD, garantir_fontes
+
+FONTE_DOCX = "Google Sans"
+
 SAIDA_DIR = Path(__file__).resolve().parent
-VERSAO = "1.00"
+VERSAO = "1.5"
 DATA_DOC = date.today().strftime("%d/%m/%Y")
 
-COR_LARANJA = colors.HexColor("#B5670A")
+COR_CINZA = colors.HexColor("#A1A1A1")
 COR_CABECALHO = colors.HexColor("#1A1A1A")
 COR_ZEBRA = colors.HexColor("#FFF8EE")
 COR_BORDA = colors.HexColor("#E2E8F0")
@@ -58,51 +66,52 @@ ENDPOINTS = [
 
 
 def _styles_pdf():
+    garantir_fontes()
     base = getSampleStyleSheet()
     return {
         "capa_titulo": ParagraphStyle(
-            "CapaTitulo", parent=base["Title"], fontName="Helvetica-Bold",
+            "CapaTitulo", parent=base["Title"], fontName=FONT_BOLD,
             fontSize=22, textColor=COR_CABECALHO, alignment=TA_CENTER, spaceAfter=8,
         ),
         "capa_sub": ParagraphStyle(
-            "CapaSub", parent=base["Normal"], fontName="Helvetica",
-            fontSize=12, textColor=COR_LARANJA, alignment=TA_CENTER, spaceAfter=6,
+            "CapaSub", parent=base["Normal"], fontName=FONT,
+            fontSize=12, textColor=COR_CINZA, alignment=TA_CENTER, spaceAfter=6,
         ),
         "capa_meta": ParagraphStyle(
-            "CapaMeta", parent=base["Normal"], fontSize=9, textColor=colors.HexColor("#555555"),
+            "CapaMeta", parent=base["Normal"], fontName=FONT, fontSize=9, textColor=colors.HexColor("#555555"),
             alignment=TA_CENTER, leading=13,
         ),
         "h1": ParagraphStyle(
-            "H1Doc", parent=base["Heading1"], fontName="Helvetica-Bold",
-            fontSize=14, textColor=COR_LARANJA, spaceBefore=14, spaceAfter=8,
+            "H1Doc", parent=base["Heading1"], fontName=FONT_BOLD,
+            fontSize=14, textColor=COR_CINZA, spaceBefore=14, spaceAfter=8,
         ),
         "h2": ParagraphStyle(
-            "H2Doc", parent=base["Heading2"], fontName="Helvetica-Bold",
+            "H2Doc", parent=base["Heading2"], fontName=FONT_BOLD,
             fontSize=11.5, textColor=COR_CABECALHO, spaceBefore=10, spaceAfter=6,
         ),
         "body": ParagraphStyle(
-            "BodyDoc", parent=base["Normal"], fontName="Helvetica",
+            "BodyDoc", parent=base["Normal"], fontName=FONT,
             fontSize=9.5, leading=13, alignment=TA_JUSTIFY, textColor=COR_TEXTO, spaceAfter=6,
         ),
         "bullet": ParagraphStyle(
-            "BulletDoc", parent=base["Normal"], fontName="Helvetica",
+            "BulletDoc", parent=base["Normal"], fontName=FONT,
             fontSize=9.5, leading=13, textColor=COR_TEXTO, leftIndent=8,
         ),
         "cell": ParagraphStyle(
-            "CellDoc", parent=base["Normal"], fontName="Helvetica",
+            "CellDoc", parent=base["Normal"], fontName=FONT,
             fontSize=7.5, leading=10, textColor=COR_TEXTO,
         ),
         "cell_h": ParagraphStyle(
-            "CellHDoc", parent=base["Normal"], fontName="Helvetica-Bold",
+            "CellHDoc", parent=base["Normal"], fontName=FONT_BOLD,
             fontSize=8, leading=10, textColor=colors.white,
         ),
         "code": ParagraphStyle(
-            "CodeDoc", parent=base["Code"], fontName="Courier",
+            "CodeDoc", parent=base["Code"], fontName=FONT,
             fontSize=8, leading=11, textColor=COR_TEXTO, backColor=colors.HexColor("#F8F8F8"),
             leftIndent=6, rightIndent=6, spaceBefore=4, spaceAfter=8,
         ),
         "footer": ParagraphStyle(
-            "FooterDoc", parent=base["Normal"], fontSize=8, textColor=colors.HexColor("#666666"),
+            "FooterDoc", parent=base["Normal"], fontName=FONT, fontSize=8, textColor=colors.HexColor("#666666"),
             alignment=TA_CENTER,
         ),
     }
@@ -116,7 +125,7 @@ def _tabela(headers, rows, col_widths, styles):
     cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), COR_CABECALHO),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_BOLD),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("GRID", (0, 0), (-1, -1), 0.4, COR_BORDA),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
@@ -133,7 +142,7 @@ def _tabela(headers, rows, col_widths, styles):
 
 def _bullets(itens, styles):
     return ListFlowable(
-        [ListItem(Paragraph(item, styles["bullet"]), leftIndent=12, bulletColor=COR_LARANJA) for item in itens],
+        [ListItem(Paragraph(item, styles["bullet"]), leftIndent=12, bulletColor=COR_CINZA) for item in itens],
         bulletType="bullet",
         start="•",
         leftIndent=18,
@@ -143,17 +152,18 @@ def _bullets(itens, styles):
 
 
 def _header_footer(canvas, doc):
+    garantir_fontes()
     canvas.saveState()
-    canvas.setFillColor(COR_LARANJA)
+    canvas.setFillColor(COR_CINZA)
     canvas.rect(0, A4[1] - 18, A4[0], 18, fill=1, stroke=0)
     canvas.setFillColor(colors.white)
-    canvas.setFont("Helvetica", 8)
+    canvas.setFont(FONT, 8)
     canvas.drawString(2 * cm, A4[1] - 13, "BudgetControl — Documentação do Sistema")
     canvas.drawRightString(A4[0] - 2 * cm, A4[1] - 13, f"v{VERSAO}")
     canvas.setFillColor(colors.HexColor("#EEEEEE"))
     canvas.rect(0, 0, A4[0], 16, fill=1, stroke=0)
     canvas.setFillColor(colors.HexColor("#555555"))
-    canvas.setFont("Helvetica", 8)
+    canvas.setFont(FONT, 8)
     canvas.drawString(2 * cm, 6, f"Gerado em {DATA_DOC}")
     canvas.drawRightString(A4[0] - 2 * cm, 6, f"Página {doc.page}")
     canvas.restoreState()
@@ -208,8 +218,8 @@ def gerar_pdf(caminho: Path) -> None:
         styles["body"],
     ))
     story.append(_bullets([
-        "<b>Dashboard web</b> — interface única em <font face='Courier'>http://127.0.0.1:5000</font>, com menu de ações, filtros, KPIs, tabelas e modais de cadastro.",
-        "<b>CLI</b> — arquivo <font face='Courier'>main.py</font>: consulta o consolidado do ano (padrão 2026 em config.py, sobrescrevível com <font face='Courier'>--ano</font>) e grava PDF em <font face='Courier'>Exportações/</font>.",
+        "<b>Dashboard web</b> — interface única em <font face='GoogleSans'>http://127.0.0.1:5000</font>, com menu de ações, filtros, KPIs, tabelas e modais de cadastro.",
+        "<b>CLI</b> — arquivo <font face='GoogleSans'>main.py</font>: consulta o consolidado do ano (padrão 2026 em config.py, sobrescrevível com <font face='GoogleSans'>--ano</font>) e grava PDF em <font face='GoogleSans'>Exportações/</font>.",
     ], styles))
 
     story.append(Paragraph("3. Arquitetura", styles["h1"]))
@@ -253,7 +263,7 @@ def gerar_pdf(caminho: Path) -> None:
     story.append(Paragraph("5. Modelo de dados", styles["h1"]))
     story.append(Paragraph(
         "O núcleo relacional combina cadastros mestres, tetos orçamentários e lançamentos. "
-        "A tabela <font face='Courier'>rubricas</font> é exposta na interface como <b>Categorias</b>.",
+        "A tabela <font face='GoogleSans'>rubricas</font> é exposta na interface como <b>Categorias</b>.",
         styles["body"],
     ))
     story.append(_tabela(
@@ -277,7 +287,7 @@ def gerar_pdf(caminho: Path) -> None:
         "Valores de despesa e orçamento não podem ser negativos (CHECK).",
         "Unicidade de orçamento mensal por orçamento anual + mês.",
         "Índices em data_compra, setor, rubrica e combinações usadas nos filtros.",
-        "Trigger <font face='Courier'>trg_despesas_auditoria</font> grava INSERT, UPDATE e DELETE em <font face='Courier'>despesas_auditoria</font>.",
+        "Trigger <font face='GoogleSans'>trg_despesas_auditoria</font> grava INSERT, UPDATE e DELETE em <font face='GoogleSans'>despesas_auditoria</font>.",
         "Exclusão de setor, fornecedor ou categoria é recusada pela aplicação se existirem despesas vinculadas.",
     ], styles))
 
@@ -293,13 +303,13 @@ def gerar_pdf(caminho: Path) -> None:
     story.append(_bullets([
         "A grade de 12 meses carrega ao escolher setor ou ano.",
         "Salvamento automático ao sair do campo (blur) ou pressionar Enter.",
-        "“Aplicar para todos os meses” replica o valor e persiste os 12 meses em lote (<font face='Courier'>aplicar_todos: true</font>).",
-        "Na visão resumida, a coluna Orçado soma os tetos de <font face='Courier'>orcamentos_setores</font> no período; mês sem cadastro conta como R$ 0,00.",
+        "“Aplicar para todos os meses” replica o valor e persiste os 12 meses em lote (<font face='GoogleSans'>aplicar_todos: true</font>).",
+        "Na visão resumida, a coluna Orçado soma os tetos de <font face='GoogleSans'>orcamentos_setores</font> no período; mês sem cadastro conta como R$ 0,00.",
         "A aba de resumo compara orçado, gasto, saldo e status por setor no ano.",
     ], styles))
     story.append(Paragraph("6.3 Status orçamentário", styles["h2"]))
     story.append(Paragraph(
-        "O percentual é gasto ÷ orçado. A função <font face='Courier'>calcular_status_orcamento</font> classifica:",
+        "O percentual é gasto ÷ orçado. A função <font face='GoogleSans'>calcular_status_orcamento</font> classifica:",
         styles["body"],
     ))
     story.append(_tabela(
@@ -341,7 +351,7 @@ def gerar_pdf(caminho: Path) -> None:
 
     story.append(Paragraph("8. API REST", styles["h1"]))
     story.append(Paragraph(
-        "Todas as rotas abaixo são servidas pelo processo Flask em <font face='Courier'>app.py</font> (porta 5000 em modo debug).",
+        "Todas as rotas abaixo são servidas pelo processo Flask em <font face='GoogleSans'>app.py</font> (porta 5000 em modo debug).",
         styles["body"],
     ))
     story.append(_tabela(
@@ -351,26 +361,26 @@ def gerar_pdf(caminho: Path) -> None:
         styles,
     ))
     story.append(Paragraph(
-        "Filtros comuns de consulta (query string): <font face='Courier'>data_inicio</font>, <font face='Courier'>data_fim</font> "
-        "(AAAA-MM-DD), <font face='Courier'>setor_id</font>, <font face='Courier'>fornecedor_id</font>, "
-        "<font face='Courier'>categoria_id</font>. Em /api/exportar-pdf, <font face='Courier'>visao=resumida</font> "
-        "ou <font face='Courier'>visao=detalhada</font>.",
+        "Filtros comuns de consulta (query string): <font face='GoogleSans'>data_inicio</font>, <font face='GoogleSans'>data_fim</font> "
+        "(AAAA-MM-DD), <font face='GoogleSans'>setor_id</font>, <font face='GoogleSans'>fornecedor_id</font>, "
+        "<font face='GoogleSans'>categoria_id</font>. Em /api/exportar-pdf, <font face='GoogleSans'>visao=resumida</font> "
+        "ou <font face='GoogleSans'>visao=detalhada</font>.",
         styles["body"],
     ))
 
     story.append(Paragraph("9. Relatórios PDF", styles["h1"]))
     story.append(_bullets([
-        "Arquivos gravados em <font face='Courier'>Exportações/</font> com carimbo de data/hora.",
-        "Resumo: <font face='Courier'>Orcamento_Resumo_AAAAMMDD_HHMMSS.pdf</font> — colunas Mês, Orçado, Gasto, % e Status.",
-        "Detalhado: <font face='Courier'>Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf</font> — lançamentos do período.",
+        "Arquivos gravados em <font face='GoogleSans'>Exportações/</font> com carimbo de data/hora.",
+        "Resumo: <font face='GoogleSans'>Orcamento_Resumo_AAAAMMDD_HHMMSS.pdf</font> — colunas Mês, Orçado, Gasto, % e Status.",
+        "Detalhado: <font face='GoogleSans'>Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf</font> — lançamentos do período.",
         "O PDF respeita os mesmos filtros da tela (datas, setor, fornecedor, categoria e visão).",
-        "CLI: <font face='Courier'>python main.py --ano 2026 --saida meu_relatorio.pdf</font>.",
+        "CLI: <font face='GoogleSans'>python main.py --ano 2026 --saida meu_relatorio.pdf</font>.",
     ], styles))
 
     story.append(Paragraph("10. Instalação e execução", styles["h1"]))
     story.append(Paragraph(
         "Pré-requisitos: Python 3.10+ e uma instância PostgreSQL (Supabase ou local). "
-        "No diretório <font face='Courier'>python sections</font>:",
+        "No diretório <font face='GoogleSans'>python sections</font>:",
         styles["body"],
     ))
     story.append(Paragraph(
@@ -381,8 +391,8 @@ def gerar_pdf(caminho: Path) -> None:
         styles["code"],
     ))
     story.append(Paragraph(
-        "Crie <font face='Courier'>python sections/.env</font> com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD. "
-        "A conexão usa <font face='Courier'>sslmode=require</font>. Não versione o arquivo .env.",
+        "Crie <font face='GoogleSans'>python sections/.env</font> com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD. "
+        "A conexão usa <font face='GoogleSans'>sslmode=require</font>. Não versione o arquivo .env.",
         styles["body"],
     ))
 
@@ -416,7 +426,7 @@ def gerar_pdf(caminho: Path) -> None:
     doc.build(story, onFirstPage=_header_footer, onLaterPages=_header_footer)
 
 
-def _set_run_font(run, name="Calibri", size=11, bold=False, color=None):
+def _set_run_font(run, name=FONTE_DOCX, size=11, bold=False, color=None):
     run.font.name = name
     run._element.rPr.rFonts.set(qn("w:eastAsia"), name)
     run.font.size = Pt(size)
@@ -474,6 +484,13 @@ def _add_table(doc: Document, headers: list[str], rows: list[list[str]]):
 
 def gerar_docx(caminho: Path) -> None:
     doc = Document()
+    for nome_estilo in ("Normal", "Heading 1", "Heading 2", "List Bullet"):
+        try:
+            estilo = doc.styles[nome_estilo]
+            estilo.font.name = FONTE_DOCX
+            estilo.element.rPr.rFonts.set(qn("w:eastAsia"), FONTE_DOCX)
+        except (KeyError, AttributeError):
+            pass
     section = doc.sections[0]
     section.top_margin = Cm(2)
     section.bottom_margin = Cm(2)

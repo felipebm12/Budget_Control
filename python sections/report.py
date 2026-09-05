@@ -6,6 +6,7 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import config
+from pdf_fonts import FONT, FONT_BOLD, garantir_fontes
 
 log = logging.getLogger(__name__)
 
@@ -24,60 +25,61 @@ COR_TOTAL_BG    = colors.HexColor("#FEF3E2")  # Fundo para linha de totais
 
 def _estilos() -> dict:
     """Cria e retorna todos os ParagraphStyles usados no PDF."""
+    garantir_fontes()
     base = getSampleStyleSheet()
 
     return {
         "titulo": ParagraphStyle(
             "Titulo", parent=base["Heading1"],
             fontSize=15, textColor=COR_TEXTO,
-            spaceAfter=3, alignment=1, fontName="Helvetica-Bold",
+            spaceAfter=3, alignment=1, fontName=FONT_BOLD,
         ),
         "subtitulo": ParagraphStyle(
             "Subtitulo", parent=base["Normal"],
             fontSize=8.5, textColor=COR_TEXTO_MEDIO,
-            spaceAfter=3, alignment=1,
+            spaceAfter=3, alignment=1, fontName=FONT,
         ),
         "data_geracao": ParagraphStyle(
             "DataGeracao", parent=base["Normal"],
             fontSize=7, textColor=COR_TEXTO_MEDIO,
-            spaceAfter=12, alignment=1,
+            spaceAfter=12, alignment=1, fontName=FONT,
         ),
         "celula": ParagraphStyle(
             "Celula", parent=base["Normal"],
-            fontSize=7.5, leading=9, textColor=COR_TEXTO,
+            fontSize=7.5, leading=9, textColor=COR_TEXTO, fontName=FONT,
         ),
         "celula_centro": ParagraphStyle(
             "CelulaCentro", parent=base["Normal"],
-            fontSize=7.5, leading=9, textColor=COR_TEXTO, alignment=1,
+            fontSize=7.5, leading=9, textColor=COR_TEXTO, alignment=1, fontName=FONT,
         ),
         "celula_bold": ParagraphStyle(
             "CelulaBold", parent=base["Normal"],
-            fontSize=7.5, leading=9, textColor=COR_TEXTO, fontName="Helvetica-Bold",
+            fontSize=7.5, leading=9, textColor=COR_TEXTO, fontName=FONT_BOLD,
         ),
         "celula_alerta": ParagraphStyle(
             "CelulaAlerta", parent=base["Normal"],
             fontSize=8, leading=10,
-            textColor=colors.HexColor("#991B1B"), fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#991B1B"), fontName=FONT_BOLD,
         ),
         "celula_perto": ParagraphStyle(
             "CelulaPerto", parent=base["Normal"],
             fontSize=8, leading=10,
-            textColor=colors.HexColor("#B45309"), fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#B45309"), fontName=FONT_BOLD,
         ),
         "celula_ok": ParagraphStyle(
             "CelulaOK", parent=base["Normal"],
             fontSize=8, leading=10,
-            textColor=colors.HexColor("#166534"), fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#166534"), fontName=FONT_BOLD,
         ),
         "cabecalho": ParagraphStyle(
             "Cabecalho", parent=base["Normal"],
             fontSize=8, leading=10,
-            textColor=colors.white, fontName="Helvetica-Bold",
+            textColor=colors.white, fontName=FONT_BOLD,
         ),
         "cabecalho_centro": ParagraphStyle(
             "CabecalhoCentro", parent=base["Normal"],
             fontSize=8, leading=10,
-            textColor=colors.white, fontName="Helvetica-Bold", alignment=1,
+            textColor=colors.white, fontName=FONT_BOLD, alignment=1,
         ),
     }
 
