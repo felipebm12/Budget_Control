@@ -1,0 +1,28 @@
+# Credenciais — NUNCA versionar
+.env
+
+# PDFs gerados
+*.pdf
+
+# Logs gerados
+*.log
+
+# Ambiente virtual Python
+venv/
+.venv/
+env/
+
+# Bytecode Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

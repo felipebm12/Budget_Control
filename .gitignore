@@ -1,0 +1,28 @@
+# ── Credenciais ──────────────────────────────────────────────
+.env
+
+# ── Arquivos gerados ─────────────────────────────────────────
+Exportações/*.pdf
+Logs/*.log
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ── Ambiente virtual ─────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── IDEs ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── Sistema operacional ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

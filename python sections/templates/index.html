@@ -1,0 +1,2796 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controle de Despesas Empresarial</title>
+  <link rel="icon" type="image/png" href="{{ url_for('favicon') }}" />
+  <link rel="apple-touch-icon" href="{{ url_for('favicon') }}" />
+  <!-- SweetAlert2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Folha de Estilos Externa -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+<body>
+
+  <!-- ── Header Principal ────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-content">
+      <div class="header-brand">
+        <div class="header-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="1" x2="12" y2="23"/>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Controle Corporativo de Despesas</h1>
+          <p>Gestão Empresarial: Setores, Fornecedores, Categorias e Destinos</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Menu Suspenso de Ações do Sistema -->
+        <div class="dropdown-sistema" id="menu-sistema-dropdown">
+          <button type="button" class="btn-menu-sistema" id="btn-toggle-menu-sistema" title="Abrir menu de opções do sistema">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+            <span>Menu</span>
+            <svg class="seta-dropdown" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          <!-- Painel Suspenso com Opções -->
+          <div class="dropdown-painel" id="painel-menu-sistema">
+            <div class="dropdown-secao-rotulo">Lançamentos & Cadastros</div>
+
+            <!-- Nova Despesa -->
+            <button type="button" class="dropdown-item item-despesa-destaque" id="btn-abrir-modal-despesa" title="Registrar nova despesa empresarial">
+              <div class="dropdown-item-icone ic-verde">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo" style="color:var(--verde-hover);">Nova Despesa</span>
+                <span class="dropdown-item-desc">Registrar novo lançamento financeiro</span>
+              </div>
+            </button>
+
+            <!-- Setores -->
+            <button type="button" class="dropdown-item" id="btn-abrir-modal-gerir-setores" title="Gerenciar setores e departamentos">
+              <div class="dropdown-item-icone ic-laranja">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Setores</span>
+                <span class="dropdown-item-desc">Departamentos e Centros de Custo</span>
+              </div>
+            </button>
+
+            <!-- Fornecedores -->
+            <button type="button" class="dropdown-item" id="btn-abrir-modal-gerir-fornecedores" title="Gerenciar empresas fornecedoras">
+              <div class="dropdown-item-icone ic-azul">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Fornecedores</span>
+                <span class="dropdown-item-desc">Cadastro de parceiros comerciais</span>
+              </div>
+            </button>
+
+            <!-- Categorias -->
+            <button type="button" class="dropdown-item" id="btn-abrir-modal-gerir-categorias" title="Gerenciar categorias de despesas">
+              <div class="dropdown-item-icone ic-roxo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Categorias</span>
+                <span class="dropdown-item-desc">Rubricas e classificações de despesa</span>
+              </div>
+            </button>
+
+            <!-- Orçamento por Setor -->
+            <button type="button" class="dropdown-item" id="btn-abrir-modal-orcamento-setor" title="Definir orçamentos mensais por setor">
+              <div class="dropdown-item-icone ic-laranja">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"/>
+                  <line x1="12" y1="20" x2="12" y2="4"/>
+                  <line x1="6" y1="20" x2="6" y2="14"/>
+                  <line x1="2" y1="20" x2="22" y2="20"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Orçamento por Setor</span>
+                <span class="dropdown-item-desc">Definir limites e metas mensais</span>
+              </div>
+            </button>
+
+            <div class="dropdown-divisor"></div>
+            <div class="dropdown-secao-rotulo">Relatórios & Manutenção</div>
+
+            <!-- Exportar PDF -->
+            <button type="button" class="dropdown-item" id="btn-exportar-pdf" title="Exportar relatório do período em PDF">
+              <div class="dropdown-item-icone ic-vermelho">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Exportar PDF</span>
+                <span class="dropdown-item-desc">Baixar relatório resumido ou detalhado</span>
+              </div>
+            </button>
+
+            <!-- Limpar Despesas -->
+            <button type="button" class="dropdown-item item-perigo" id="btn-limpar-todas-despesas" title="Limpar todas as despesas cadastradas">
+              <div class="dropdown-item-icone" style="background:var(--vermelho-bg); color:var(--vermelho);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo" style="color:var(--vermelho);">Limpar Despesas</span>
+                <span class="dropdown-item-desc">Excluir lançamentos do sistema</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Barra de Filtros Dinâmicos entre Datas e Entidades ─────────────── -->
+  <div class="toolbar-container">
+    <div class="toolbar">
+      <div class="toolbar-row-principal">
+        <!-- Intervalo de Datas Dinâmico e Botão de Filtros -->
+        <div class="filtros-grupo">
+          <div class="campo-box">
+            <label for="filtro-data-inicio">De:</label>
+            <input type="date" id="filtro-data-inicio" class="input-controle" />
+          </div>
+
+          <div class="campo-box">
+            <label for="filtro-data-fim">Até:</label>
+            <input type="date" id="filtro-data-fim" class="input-controle" />
+          </div>
+
+          <!-- Botão Amigável para Expandir/Ocultar Filtros -->
+          <button type="button" class="btn-toggle-filtros" id="btn-toggle-filtros" title="Exibir/ocultar filtros por Setor, Fornecedor e Categoria">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            <span>Filtros</span>
+            <span class="badge-filtro-ativo" id="badge-filtro-cont" style="display:none;">0</span>
+            <svg class="seta-filtro" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Alternador de Visão: Resumo x Detalhada -->
+        <div class="view-toggle">
+          <button class="view-btn ativo" id="btn-visao-resumo" data-visao="resumida">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            Visão Resumida
+          </button>
+          <button class="view-btn" id="btn-visao-detalhada" data-visao="detalhada">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/>
+              <line x1="3" y1="12" x2="3.01" y2="12"/>
+              <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            Visão Detalhada
+          </button>
+        </div>
+      </div>
+
+      <!-- Atalhos rápidos de data -->
+      <div class="toolbar-row-atalhos">
+        <div class="presets-grupo">
+          <span class="presets-label">Atalhos:</span>
+          <button type="button" class="btn-preset ativo" data-preset="este-mes">Este Mês</button>
+          <button type="button" class="btn-preset" data-preset="mes-anterior">Mês Anterior</button>
+          <button type="button" class="btn-preset" data-preset="este-ano">Este Ano</button>
+          <button type="button" class="btn-preset" data-preset="ano-anterior">Ano Anterior</button>
+          <button type="button" class="btn-preset" data-preset="todos">Todo o Período</button>
+        </div>
+      </div>
+
+      <!-- Painel Gaveta de Filtros Avançados (Setor, Fornecedor, Categoria) -->
+      <div class="painel-filtros-avancados" id="painel-filtros-avancados">
+        <div class="painel-filtros-header">
+          <span>🎯 Filtros específicos por departamento, parceiro comercial ou classificação:</span>
+          <button type="button" class="btn-limpar-filtros" id="btn-limpar-filtros-avancados" title="Limpar filtros de Setor, Fornecedor e Categoria">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            Limpar Filtros
+          </button>
+        </div>
+        <div class="painel-filtros-row">
+          <!-- Filtro de Setor -->
+          <div class="campo-box">
+            <label for="filtro-setor">Setor:</label>
+            <select id="filtro-setor" class="input-controle">
+              <option value="0">Todos os Setores</option>
+            </select>
+          </div>
+
+          <!-- Filtro de Fornecedor -->
+          <div class="campo-box">
+            <label for="filtro-fornecedor">Fornecedor:</label>
+            <select id="filtro-fornecedor" class="input-controle">
+              <option value="0">Todos os Fornecedores</option>
+            </select>
+          </div>
+
+          <!-- Filtro de Categoria -->
+          <div class="campo-box">
+            <label for="filtro-categoria">Categoria:</label>
+            <select id="filtro-categoria" class="input-controle">
+              <option value="0">Todas as Categorias</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Conteúdo Principal ──────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Cards de Resumo (KPIs) -->
+    <div class="cards-grid" id="kpi-cards">
+      <!-- Card 1: Orçado ou Quantidade -->
+      <div class="card">
+        <div class="card-top">
+          <span class="card-label" id="card1-label">Total Orçado</span>
+          <div class="card-icone ic-laranja" id="card1-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+        </div>
+        <span class="card-valor" id="card1-valor">—</span>
+        <span class="card-sub" id="card1-sub">Previsão no período</span>
+      </div>
+
+      <!-- Card 2: Total Gasto -->
+      <div class="card">
+        <div class="card-top">
+          <span class="card-label">Total Gasto</span>
+          <div class="card-icone ic-vermelho">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+        </div>
+        <span class="card-valor" id="card2-valor">—</span>
+        <span class="card-sub" id="card2-sub">Despesas registradas</span>
+      </div>
+
+      <!-- Card 3: Saldo ou Média -->
+      <div class="card">
+        <div class="card-top">
+          <span class="card-label" id="card3-label">Saldo Restante</span>
+          <div class="card-icone ic-verde" id="card3-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <span class="card-valor" id="card3-valor">—</span>
+        <span class="card-sub" id="card3-sub">Orçado − Gasto</span>
+      </div>
+
+      <!-- Card 4: % Utilização ou Maior Gasto -->
+      <div class="card">
+        <div class="card-top">
+          <span class="card-label" id="card4-label">% Utilização</span>
+          <div class="card-icone ic-azul" id="card4-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <span class="card-valor" id="card4-valor">—</span>
+        <div class="prog-container" id="card4-prog-box">
+          <div class="prog-label" id="card4-prog-label">Limite: 80%</div>
+          <div class="prog-bar">
+            <div class="prog-fill prog-ok" id="card4-prog-fill" style="width: 0%"></div>
+          </div>
+        </div>
+        <span class="card-sub" id="card4-sub" style="display:none"></span>
+      </div>
+    </div>
+
+    <!-- Painel de Tabela -->
+    <div class="painel-tabela">
+      <div class="painel-header">
+        <div class="painel-titulo-box">
+          <h2 id="tabela-titulo">Visão Resumida por Mês</h2>
+          <p id="tabela-subtitulo">Acompanhamento consolidado de orçamentos e despesas no período</p>
+        </div>
+
+        <div class="painel-badges">
+          <input type="text" id="filtro-busca-tabela" class="busca-input" placeholder="🔍 Buscar por descrição, setor, fornecedor, categoria..." style="display:none" />
+
+          <!-- Controle de Ordenação da Grid -->
+          <div class="grupo-ordenacao" id="grupo-ordenacao">
+            <label for="sel-ordenar-campo" class="label-ordenacao">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="21" y1="10" x2="7" y2="10"/>
+                <line x1="21" y1="6" x2="3" y2="6"/>
+                <line x1="21" y1="14" x2="11" y2="14"/>
+                <line x1="21" y1="18" x2="7" y2="18"/>
+              </svg>
+              <span>Ordenar:</span>
+            </label>
+            <select id="sel-ordenar-campo" class="input-controle sel-ordenar" title="Coluna para ordenar">
+              <option value="data">Data</option>
+              <option value="valor">Valor</option>
+              <option value="descricao">Descrição</option>
+              <option value="setor">Setor</option>
+              <option value="fornecedor">Fornecedor</option>
+              <option value="categoria">Categoria</option>
+            </select>
+            <button type="button" class="btn-ordenacao" id="btn-toggle-ordem" title="Alternar entre ordem Crescente e Decrescente">
+              <svg id="svg-ordem-icone" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <polyline points="19 12 12 19 5 12"/>
+              </svg>
+              <span id="txt-ordem-direcao">Decrescente</span>
+            </button>
+          </div>
+
+          <button type="button" class="btn btn-cadastrar-despesa" id="btn-atalho-nova-despesa" style="padding:.42rem .95rem; font-size:.82rem; gap:.4rem;" title="Cadastrar nova despesa empresarial">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Nova Despesa</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="estado-loading" class="estado-box">
+        <div class="spinner"></div>
+        <p>Carregando dados do servidor...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="estado-erro" class="estado-box" style="display:none; color: var(--vermelho)">
+        <p>⚠️ Ocorreu um erro ao carregar os dados.</p>
+        <small id="erro-detalhe" style="opacity:.8"></small>
+      </div>
+
+      <!-- Empty State -->
+      <div id="estado-vazio" class="estado-box" style="display:none">
+        <p>📭 Nenhum registro encontrado para este filtro.</p>
+      </div>
+
+      <!-- Tabela Resumida -->
+      <div class="tabela-scroll" id="wrap-tabela-resumo" style="display:none">
+        <table id="tabela-resumo">
+          <thead>
+            <tr>
+              <th class="th-sortable" data-sort="mes_num" title="Clique para ordenar por Mês">Mês / Período <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="orcado" title="Clique para ordenar por Valor Orçado">Orçado (R$) <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="gasto" title="Clique para ordenar por Total Gasto">Gasto (R$) <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="saldo" title="Clique para ordenar por Saldo">Saldo (R$) <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="percentual" title="Clique para ordenar por % Utilização">% Utilizado <span class="th-sort-icon"></span></th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-resumo"></tbody>
+        </table>
+      </div>
+
+      <!-- Tabela Detalhada com Setor, Fornecedor, Categoria e Destino -->
+      <div class="tabela-scroll" id="wrap-tabela-detalhada" style="display:none">
+        <table id="tabela-detalhada">
+          <thead>
+            <tr>
+              <th class="th-sortable" data-sort="data" title="Clique para ordenar por Data">Data <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="descricao" title="Clique para ordenar por Descrição">Descrição <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="setor" title="Clique para ordenar por Setor">Setor <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="fornecedor" title="Clique para ordenar por Fornecedor">Fornecedor <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="categoria" title="Clique para ordenar por Categoria">Categoria <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="destino" title="Clique para ordenar por Destino">Destino <span class="th-sort-icon"></span></th>
+              <th class="th-sortable" data-sort="valor" title="Clique para ordenar por Valor">Valor (R$) <span class="th-sort-icon"></span></th>
+              <th style="text-align:center; width: 90px;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-detalhada"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Rodapé ──────────────────────────────────────────────────────────── -->
+  <footer>
+    Controle de Despesas v1.52 &nbsp;·&nbsp; Projeto "Front VibeCoded" &nbsp;·&nbsp; Sistema Integrado de Controle de Despesas Empresarial
+  </footer>
+
+  <!-- ── Modal: Cadastrar Nova Despesa ────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-despesa">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Cadastrar Nova Despesa</h3>
+        <button class="btn-fechar" data-fechar="modal-despesa">&times;</button>
+      </div>
+      <form id="form-despesa">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="desp-descricao">Descrição da Despesa *</label>
+            <input type="text" id="desp-descricao" class="form-control" placeholder="Ex: Licença de Software, Suprimentos de Escritório, Manutenção..." required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="desp-valor">Valor (R$) *</label>
+              <input type="number" id="desp-valor" class="form-control" placeholder="0,00" step="0.01" min="0.01" required />
+            </div>
+            <div class="form-group">
+              <label for="desp-data">Data da Compra *</label>
+              <input type="date" id="desp-data" class="form-control" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="desp-setor">Setor Responsável *</label>
+              <select id="desp-setor" class="form-control" required>
+                <option value="">Selecione o setor...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="desp-fornecedor">Fornecedor *</label>
+              <select id="desp-fornecedor" class="form-control" required>
+                <option value="">Selecione o fornecedor...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="desp-categoria">Categoria *</label>
+              <select id="desp-categoria" class="form-control" required>
+                <option value="">Selecione a categoria...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="desp-destino">Destino / Finalidade</label>
+              <input type="text" id="desp-destino" class="form-control" placeholder="Ex: Sede, Filial SP, Projeto Web, Frota..." />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-fechar="modal-despesa">Cancelar</button>
+          <button type="submit" class="btn btn-cadastrar-despesa" id="btn-salvar-despesa">Gravar Despesa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal: Editar Despesa ───────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-editar-despesa">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Editar Lançamento de Despesa</h3>
+        <button class="btn-fechar" data-fechar="modal-editar-despesa">&times;</button>
+      </div>
+      <form id="form-editar-despesa">
+        <input type="hidden" id="edit-desp-id" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="edit-desp-descricao">Descrição da Despesa *</label>
+            <input type="text" id="edit-desp-descricao" class="form-control" required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-desp-valor">Valor (R$) *</label>
+              <input type="number" id="edit-desp-valor" class="form-control" placeholder="0,00" step="0.01" min="0.01" required />
+            </div>
+            <div class="form-group">
+              <label for="edit-desp-data">Data da Compra *</label>
+              <input type="date" id="edit-desp-data" class="form-control" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-desp-setor">Setor Responsável *</label>
+              <select id="edit-desp-setor" class="form-control" required>
+                <option value="">Selecione o setor...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-desp-fornecedor">Fornecedor *</label>
+              <select id="edit-desp-fornecedor" class="form-control" required>
+                <option value="">Selecione o fornecedor...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-desp-categoria">Categoria *</label>
+              <select id="edit-desp-categoria" class="form-control" required>
+                <option value="">Selecione a categoria...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-desp-destino">Destino / Finalidade</label>
+              <input type="text" id="edit-desp-destino" class="form-control" placeholder="Ex: Sede, Filial SP, Projeto Web, Frota..." />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-fechar="modal-editar-despesa">Cancelar</button>
+          <button type="submit" class="btn btn-cadastrar-despesa" id="btn-salvar-edicao-despesa">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal: Gerenciar Setores ────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-gerir-setores">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <h3>🏷️ Gerenciamento de Setores (Departamentos)</h3>
+        <button class="btn-fechar" data-fechar="modal-gerir-setores">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="gestao-top-bar">
+          <input type="text" id="busca-setor-modal" class="busca-input" placeholder="🔍 Filtrar setores..." />
+          <button type="button" class="btn btn-primario" id="btn-abrir-novo-setor-inline">
+            + Novo Setor
+          </button>
+        </div>
+
+        <div class="tabela-gestao-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Setor</th>
+                <th>Descrição / Atribuição</th>
+                <th style="text-align:center;">Despesas</th>
+                <th>Total Gasto</th>
+                <th style="text-align:center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-setores-gestao"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-fechar="modal-gerir-setores">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Gerenciar Fornecedores ───────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-gerir-fornecedores">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <h3>🏢 Gerenciamento de Fornecedores</h3>
+        <button class="btn-fechar" data-fechar="modal-gerir-fornecedores">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="gestao-top-bar">
+          <input type="text" id="busca-fornecedor-modal" class="busca-input" placeholder="🔍 Filtrar fornecedores..." />
+          <button type="button" class="btn btn-primario" id="btn-abrir-novo-fornecedor-inline">
+            + Novo Fornecedor
+          </button>
+        </div>
+
+        <div class="tabela-gestao-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Fornecedor</th>
+                <th>Descrição / Contato</th>
+                <th style="text-align:center;">Despesas</th>
+                <th>Total Gasto</th>
+                <th style="text-align:center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-fornecedores-gestao"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-fechar="modal-gerir-fornecedores">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Gerenciar Categorias ─────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-gerir-categorias">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <h3>🏷️ Gerenciamento de Categorias (Rubricas)</h3>
+        <button class="btn-fechar" data-fechar="modal-gerir-categorias">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="gestao-top-bar">
+          <input type="text" id="busca-categoria-modal" class="busca-input" placeholder="🔍 Filtrar categorias..." />
+          <button type="button" class="btn btn-primario" id="btn-abrir-nova-categoria-inline" style="background:#7c3aed; border-color:#7c3aed;">
+            + Nova Categoria
+          </button>
+        </div>
+
+        <div class="tabela-gestao-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Descrição / Classificação</th>
+                <th style="text-align:center;">Despesas</th>
+                <th>Total Gasto</th>
+                <th style="text-align:center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-categorias-gestao"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-fechar="modal-gerir-categorias">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Orçamento por Setor ──────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-orcamento-setor">
+    <div class="modal-card" style="max-width: 860px;">
+      <div class="modal-header">
+        <h3>📊 Orçamento por Setor</h3>
+        <button class="btn-fechar" data-fechar="modal-orcamento-setor">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Tabs -->
+        <div class="orc-tabs">
+          <button class="orc-tab-btn ativo" data-tab="mensal">📅 Definir Orçamento Mensal</button>
+          <button class="orc-tab-btn" data-tab="resumo">📈 Resumo por Setor</button>
+        </div>
+
+        <!-- Aba 1: Definir Orçamento Mensal -->
+        <div class="orc-tab-painel ativo" id="orc-tab-mensal">
+          <!-- Controles: setor + ano -->
+          <div class="orc-setor-controles">
+            <div class="orc-campo-setor">
+              <label for="orc-sel-setor">Setor / Departamento</label>
+              <select id="orc-sel-setor" class="form-control orc-setor-select">
+                <option value="">Selecione um setor...</option>
+              </select>
+            </div>
+            <div class="orc-campo-ano">
+              <label for="orc-sel-ano">Ano</label>
+              <input type="number" id="orc-sel-ano" class="form-control orc-ano-input" min="2020" max="2035" />
+            </div>
+            <div class="orc-campo-btn">
+              <button type="button" class="btn btn-primario btn-carregar-setor" id="btn-carregar-orcamentos">Carregar</button>
+            </div>
+          </div>
+
+          <!-- Barra de Opções e Instruções -->
+          <div id="orc-barra-opcoes" style="display:none; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; padding:.6rem .85rem; background:var(--cinza-50); border:1px solid var(--cinza-200); border-radius:8px;">
+            <p id="orc-instrucao" style="font-size:.8rem; color:var(--cinza-600); margin:0;">
+              💡 Edite os valores de cada mês e clique <strong>fora do campo</strong> para salvar automaticamente. Deixe <strong>0,00</strong> para meses sem orçamento definido.
+            </p>
+            <label style="display:inline-flex; align-items:center; gap:.5rem; font-size:.84rem; font-weight:700; color:var(--cinza-800); cursor:pointer; user-select:none; background:var(--branco); padding:.4rem .85rem; border-radius:6px; border:1px solid var(--cinza-300); box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+              <input type="checkbox" id="chk-orc-aplicar-todos" style="width:16px; height:16px; accent-color:var(--primaria); cursor:pointer;" />
+              <span>Aplicar para todos os meses</span>
+            </label>
+          </div>
+
+          <!-- Grade de meses -->
+          <div class="orc-grade-meses" id="orc-grade-meses">
+            <div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--cinza-600);">
+              Selecione um setor e clique em <strong>Carregar</strong> para ver e editar os orçamentos mensais.
+            </div>
+          </div>
+        </div>
+
+        <!-- Aba 2: Resumo por Setor -->
+        <div class="orc-tab-painel" id="orc-tab-resumo">
+          <div class="orc-setor-controles">
+            <div class="orc-campo-ano">
+              <label for="orc-resumo-ano">Ano de Referência</label>
+              <input type="number" id="orc-resumo-ano" class="form-control orc-ano-input" min="2020" max="2035" />
+            </div>
+            <div class="orc-campo-btn">
+              <button type="button" class="btn btn-primario btn-carregar-setor" id="btn-carregar-resumo-orcamentos">Ver Resumo</button>
+            </div>
+          </div>
+          <div class="orc-resumo-grid" id="orc-resumo-grid">
+            <div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--cinza-600);">
+              Selecione o ano e clique em <strong>Ver Resumo</strong> para visualizar o status de orçamento de todos os setores.
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-fechar="modal-orcamento-setor">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Script da Aplicação ─────────────────────────────────────────────── -->
+  <script>
+    // ── Estado Global ──────────────────────────────────────────────────────
+    const estado = {
+      dataInicio: "",
+      dataFim: "",
+      setorId: 0,
+      fornecedorId: 0,
+      categoriaId: 0,
+      visao: "resumida",
+      dadosResumo: null,
+      despesasLista: [],
+      setores: [],
+      fornecedores: [],
+      categorias: [],
+      ordenacao: { campo: "data", direcao: "desc" },
+    };
+
+    // ── Utilitários de Formatação ──────────────────────────────────────────
+    const fmtMoeda = (val) =>
+      "R$ " + Number(val || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const fmtPct = (val) =>
+      Number(val || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+
+    const fmtDataBR = (isoStr) => {
+      if (!isoStr) return "";
+      const [y, m, d] = isoStr.split("-");
+      return `${d}/${m}/${y}`;
+    };
+
+    // ── Lógica de Status do Orçamento ──────────────────────────────────────
+    function obterStatusOrcamento(percentual, orcado, gasto) {
+      const pct = Number(percentual || 0);
+      const orc = Number(orcado || 0);
+      const gst = Number(gasto || 0);
+
+      // Se orçado é 0 e há gasto registrado, está acima do orçamento
+      if (orc <= 0 && gst > 0) {
+        return {
+          texto: "Acima do orçamento",
+          classeBadge: "badge-acima",
+          classeDot: "dot-acima",
+          classeLinha: "linha-alerta",
+          classeProg: "prog-alerta",
+          tipo: "acima"
+        };
+      }
+
+      if (pct >= 100) {
+        return {
+          texto: "Acima do orçamento",
+          classeBadge: "badge-acima",
+          classeDot: "dot-acima",
+          classeLinha: "linha-alerta",
+          classeProg: "prog-alerta",
+          tipo: "acima"
+        };
+      } else if (pct >= 80) {
+        return {
+          texto: "Perto de atingir o orçamento",
+          classeBadge: "badge-perto",
+          classeDot: "dot-perto",
+          classeLinha: "linha-perto",
+          classeProg: "prog-perto",
+          tipo: "perto"
+        };
+      } else {
+        return {
+          texto: "Dentro do orçamento",
+          classeBadge: "badge-ok",
+          classeDot: "dot-ok",
+          classeLinha: "",
+          classeProg: "prog-ok",
+          tipo: "ok"
+        };
+      }
+    }
+
+    // ── SweetAlert2 Toast Helper ───────────────────────────────────────────
+    const Toast = Swal.mixin({
+      toast: true,
+      position: 'bottom-end',
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true,
+    });
+
+    function avisarSucesso(mensagem) {
+      Toast.fire({ icon: 'success', title: mensagem });
+    }
+
+    function avisarErro(mensagem) {
+      Toast.fire({ icon: 'error', title: mensagem });
+    }
+
+    // ── Funções de Ordenação ───────────────────────────────────────────────
+    const OPCOES_RESUMIDA = [
+      { value: "mes_num",    label: "Mês" },
+      { value: "orcado",     label: "Orçado" },
+      { value: "gasto",      label: "Gasto" },
+      { value: "saldo",      label: "Saldo" },
+      { value: "percentual", label: "% Utilizado" },
+    ];
+
+    const OPCOES_DETALHADA = [
+      { value: "data",        label: "Data" },
+      { value: "valor",       label: "Valor" },
+      { value: "descricao",   label: "Descrição" },
+      { value: "setor",       label: "Setor" },
+      { value: "fornecedor",  label: "Fornecedor" },
+      { value: "categoria",   label: "Categoria" },
+      { value: "destino",     label: "Destino" },
+    ];
+
+    function configurarSelectOrdenacao(opcoes, campoPadrao, direcaoPadrao) {
+      const sel = document.getElementById("sel-ordenar-campo");
+      sel.innerHTML = opcoes.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
+      estado.ordenacao.campo = campoPadrao;
+      estado.ordenacao.direcao = direcaoPadrao;
+      sel.value = campoPadrao;
+      atualizarControlesOrdenacao();
+    }
+
+    function atualizarControlesOrdenacao() {
+      const { campo, direcao } = estado.ordenacao;
+      const sel = document.getElementById("sel-ordenar-campo");
+      if (sel) sel.value = campo;
+
+      const btn = document.getElementById("btn-toggle-ordem");
+      const txt = document.getElementById("txt-ordem-direcao");
+      const svg = document.getElementById("svg-ordem-icone");
+      if (!btn || !txt || !svg) return;
+
+      if (direcao === "asc") {
+        txt.textContent = "Crescente";
+        btn.classList.remove("ativo");
+        svg.innerHTML = `<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>`;
+      } else {
+        txt.textContent = "Decrescente";
+        btn.classList.add("ativo");
+        svg.innerHTML = `<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>`;
+      }
+
+      atualizarIndicadoresCabecalhoTabela();
+    }
+
+    function atualizarIndicadoresCabecalhoTabela() {
+      const { campo, direcao } = estado.ordenacao;
+      document.querySelectorAll("thead th.th-sortable").forEach((th) => {
+        const thCampo = th.getAttribute("data-sort");
+        const icon = th.querySelector(".th-sort-icon");
+        if (thCampo === campo) {
+          th.classList.add("sort-ativo");
+          if (icon) icon.textContent = direcao === "asc" ? "▲" : "▼";
+        } else {
+          th.classList.remove("sort-ativo");
+          if (icon) icon.textContent = "";
+        }
+      });
+    }
+
+    function ordenarLista(lista, campo, direcao) {
+      return [...lista].sort((a, b) => {
+        let va = a[campo];
+        let vb = b[campo];
+
+        // Campos numéricos
+        if (["mes_num", "orcado", "gasto", "saldo", "percentual", "valor"].includes(campo)) {
+          va = Number(va) || 0;
+          vb = Number(vb) || 0;
+          return direcao === "asc" ? va - vb : vb - va;
+        }
+
+        // Ordenação por data usando o campo raw (YYYY-MM-DD)
+        if (campo === "data") {
+          const dataA = a["data_raw"] || va || "";
+          const dataB = b["data_raw"] || vb || "";
+          return direcao === "asc"
+            ? dataA.localeCompare(dataB)
+            : dataB.localeCompare(dataA);
+        }
+
+        // Campos de texto
+        va = String(va || "");
+        vb = String(vb || "");
+        const cmp = va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        return direcao === "asc" ? cmp : -cmp;
+      });
+    }
+
+    function reaplicarOrdenacaoTabela() {
+      const { campo, direcao } = estado.ordenacao;
+      const termo = (document.getElementById("filtro-busca-tabela")?.value || "").toLowerCase().trim();
+
+      let lista = estado.despesasLista;
+      if (termo) {
+        lista = lista.filter(d =>
+          d.descricao.toLowerCase().includes(termo) ||
+          d.setor.toLowerCase().includes(termo) ||
+          d.fornecedor.toLowerCase().includes(termo) ||
+          d.categoria.toLowerCase().includes(termo) ||
+          (d.destino && d.destino.toLowerCase().includes(termo)) ||
+          d.data.includes(termo)
+        );
+      }
+      const ordenada = ordenarLista(lista, campo, direcao);
+      renderTabelaDetalhada(ordenada);
+
+      if (lista.length === 0) {
+        renderCardsDetalheVazio();
+      } else {
+        renderCardsDetalhe({
+          quantidade: lista.length,
+          total_gasto: lista.reduce((acc, x) => acc + Number(x.valor || 0), 0),
+          despesas: lista
+        });
+      }
+    }
+
+
+    function configurarDatasIniciais() {
+      const hoje = new Date();
+      const y = hoje.getFullYear();
+      const m = hoje.getMonth() + 1;
+      const ultimoDia = new Date(y, m, 0).getDate();
+
+      estado.dataInicio = `${y}-${String(m).padStart(2, "0")}-01`;
+      estado.dataFim = `${y}-${String(m).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+
+      document.getElementById("filtro-data-inicio").value = estado.dataInicio;
+      document.getElementById("filtro-data-fim").value = estado.dataFim;
+      document.getElementById("desp-data").value = hoje.toISOString().split("T")[0];
+    }
+
+    async function inicializar() {
+      configurarDatasIniciais();
+      await carregarListasAuxiliares();
+      carregarDadosView();
+    }
+
+    // ── Carregar Setores, Fornecedores e Categorias ────────────────────────
+    async function carregarListasAuxiliares() {
+      try {
+        const [resSet, resForn, resCat] = await Promise.all([
+          fetch("/api/setores"),
+          fetch("/api/fornecedores"),
+          fetch("/api/categorias"),
+        ]);
+        const dataSet = await resSet.json();
+        const dataForn = await resForn.json();
+        const dataCat = await resCat.json();
+
+        estado.setores = dataSet.setores || [];
+        estado.fornecedores = dataForn.fornecedores || [];
+        estado.categorias = dataCat.categorias || [];
+
+        // Popular selects da barra superior
+        popularSelect("filtro-setor", estado.setores, "id", "nome", "Todos os Setores", true);
+        popularSelect("filtro-fornecedor", estado.fornecedores, "id", "nome", "Todos os Fornecedores", true);
+        popularSelect("filtro-categoria", estado.categorias, "id", "nome", "Todas as Categorias", true);
+
+        // Popular selects do formulário de despesa
+        popularSelect("desp-setor", estado.setores, "id", "nome", "Selecione o setor...");
+        popularSelect("desp-fornecedor", estado.fornecedores, "id", "nome", "Selecione o fornecedor...");
+        popularSelect("desp-categoria", estado.categorias, "id", "nome", "Selecione a categoria...");
+      } catch (e) {
+        console.error("Erro ao carregar listas auxiliares:", e);
+      }
+    }
+
+    function popularSelect(id, itens, valKey, textKey, placeholder, manterPrimeiraOpcaoZero = false) {
+      const sel = document.getElementById(id);
+      const valorAtual = sel.value;
+      sel.innerHTML = manterPrimeiraOpcaoZero
+        ? `<option value="0">${placeholder}</option>`
+        : `<option value="">${placeholder}</option>`;
+
+      itens.forEach((item) => {
+        const opt = document.createElement("option");
+        opt.value = item[valKey];
+        opt.textContent = item[textKey];
+        sel.appendChild(opt);
+      });
+
+      if (valorAtual) sel.value = valorAtual;
+    }
+
+    // ── Orquestrador de Visualização ───────────────────────────────────────
+    async function carregarDadosView() {
+      mostrarLoading();
+
+      const badgePeriodo = document.getElementById("badge-periodo");
+      if (badgePeriodo) {
+        badgePeriodo.textContent = `${fmtDataBR(estado.dataInicio)} a ${fmtDataBR(estado.dataFim)}`;
+      }
+
+      if (estado.visao === "resumida") {
+        await carregarVisaoResumida();
+      } else {
+        await carregarVisaoDetalhada();
+      }
+    }
+
+    function montarQueryParams() {
+      let params = `data_inicio=${estado.dataInicio}&data_fim=${estado.dataFim}`;
+      if (estado.setorId) params += `&setor_id=${estado.setorId}`;
+      if (estado.fornecedorId) params += `&fornecedor_id=${estado.fornecedorId}`;
+      if (estado.categoriaId) params += `&categoria_id=${estado.categoriaId}`;
+      return params;
+    }
+
+    // ── 1. Visão Resumida ──────────────────────────────────────────────────
+    async function carregarVisaoResumida() {
+      document.getElementById("tabela-titulo").textContent = "Visão Resumida por Mês";
+      document.getElementById("tabela-subtitulo").textContent = "Consolidado de orçamentos e gastos no intervalo selecionado";
+      document.getElementById("filtro-busca-tabela").style.display = "none";
+
+      configurarSelectOrdenacao(OPCOES_RESUMIDA, "mes_num", "asc");
+
+      const url = `/api/dados?${montarQueryParams()}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.erro) {
+          mostrarErro(data.erro);
+          return;
+        }
+
+        estado.dadosResumo = data;
+
+        if (!data.meses || data.meses.length === 0) {
+          mostrarVazio();
+          renderCardsResumoVazio();
+          return;
+        }
+
+        renderCardsResumo(data);
+        const { campo, direcao } = estado.ordenacao;
+        renderTabelaResumo(ordenarLista(data.meses, campo, direcao));
+      } catch (e) {
+        mostrarErro("Falha ao comunicar com o servidor: " + e.message);
+      }
+    }
+
+
+    function renderCardsResumo(d) {
+      document.getElementById("card1-label").textContent = "Total Orçado";
+      document.getElementById("card1-valor").textContent = fmtMoeda(d.total_orcado);
+      document.getElementById("card1-sub").textContent = `Previsão no intervalo (${d.meses.length} mês/meses)`;
+      const c1Icon = document.getElementById("card1-icon");
+      if (c1Icon) {
+        c1Icon.className = "card-icone ic-laranja";
+        c1Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+      }
+
+      document.getElementById("card2-valor").textContent = fmtMoeda(d.total_gasto);
+      document.getElementById("card2-sub").textContent = "Total de despesas executadas";
+
+      document.getElementById("card3-label").textContent = "Saldo Restante";
+      const saldo = d.saldo;
+      const card3Val = document.getElementById("card3-valor");
+      card3Val.textContent = fmtMoeda(saldo);
+      card3Val.style.color = saldo < 0 ? "var(--vermelho)" : "var(--verde-hover)";
+      card3Val.style.fontSize = "1.45rem";
+      card3Val.removeAttribute("title");
+      document.getElementById("card3-sub").textContent = saldo < 0 ? "Orçamento Ultrapassado!" : "Dentro do previsto";
+      const c3Icon = document.getElementById("card3-icon");
+      if (c3Icon) {
+        c3Icon.className = "card-icone ic-verde";
+        c3Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      }
+
+      document.getElementById("card4-label").textContent = "% Utilização";
+      document.getElementById("card4-valor").textContent = fmtPct(d.pct_geral);
+      document.getElementById("card4-prog-box").style.display = "block";
+      document.getElementById("card4-sub").style.display = "none";
+
+      const limiteAlerta = d.meses[0]?.pct_alerta || 80;
+      document.getElementById("card4-prog-label").textContent = `Limite de Alerta: ${limiteAlerta}%`;
+
+      const fill = document.getElementById("card4-prog-fill");
+      fill.style.width = Math.min(d.pct_geral, 100) + "%";
+      if (d.pct_geral >= 100) {
+        fill.className = "prog-fill prog-alerta";
+      } else if (d.pct_geral >= 80) {
+        fill.className = "prog-fill prog-perto";
+      } else {
+        fill.className = "prog-fill prog-ok";
+      }
+    }
+
+    function renderCardsResumoVazio() {
+      document.getElementById("card1-valor").textContent = "R$ 0,00";
+      document.getElementById("card2-valor").textContent = "R$ 0,00";
+      document.getElementById("card3-valor").textContent = "R$ 0,00";
+      document.getElementById("card4-valor").textContent = "0,00%";
+      document.getElementById("card4-prog-fill").style.width = "0%";
+    }
+
+    function renderTabelaResumo(meses) {
+      const tbody = document.getElementById("tbody-resumo");
+      tbody.innerHTML = "";
+
+      meses.forEach((m) => {
+        const st = obterStatusOrcamento(m.percentual, m.orcado, m.gasto);
+        const pctCap = Math.min(m.percentual, 100);
+
+        const tr = document.createElement("tr");
+        if (st.classeLinha) tr.classList.add(st.classeLinha);
+
+        tr.innerHTML = `
+          <td class="td-destaque">${m.mes}</td>
+          <td class="td-num">${m.orcado_fmt}</td>
+          <td class="td-num">${m.gasto_fmt}</td>
+          <td class="td-num" style="color: ${m.saldo < 0 ? 'var(--vermelho)' : 'var(--cinza-800)'}">${m.saldo_fmt}</td>
+          <td>
+            <div class="prog-inline">
+              <div class="prog-bar">
+                <div class="prog-fill ${st.classeProg}" style="width: ${pctCap}%"></div>
+              </div>
+              <span class="prog-pct">${m.percentual_fmt}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge ${st.classeBadge}">
+              <span class="dot ${st.classeDot}"></span>
+              ${st.texto}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("estado-loading").style.display = "none";
+      document.getElementById("estado-erro").style.display = "none";
+      document.getElementById("estado-vazio").style.display = "none";
+      document.getElementById("wrap-tabela-detalhada").style.display = "none";
+      document.getElementById("wrap-tabela-resumo").style.display = "";
+    }
+
+    // ── 2. Visão Detalhada ─────────────────────────────────────────────────
+    async function carregarVisaoDetalhada() {
+      document.getElementById("tabela-titulo").textContent = "Despesas Detalhadas";
+      document.getElementById("tabela-subtitulo").textContent = "Lançamentos individuais discriminando Setor, Fornecedor, Categoria e Destino";
+      document.getElementById("filtro-busca-tabela").style.display = "";
+
+      configurarSelectOrdenacao(OPCOES_DETALHADA, "data", "desc");
+
+      const url = `/api/despesas?${montarQueryParams()}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.erro) {
+          mostrarErro(data.erro);
+          return;
+        }
+
+        estado.despesasLista = data.despesas || [];
+
+        if (estado.despesasLista.length === 0) {
+          mostrarVazio();
+          renderCardsDetalheVazio();
+          return;
+        }
+
+        renderCardsDetalhe(data);
+        const { campo, direcao } = estado.ordenacao;
+        renderTabelaDetalhada(ordenarLista(estado.despesasLista, campo, direcao));
+      } catch (e) {
+        mostrarErro("Falha ao comunicar com o servidor: " + e.message);
+      }
+    }
+
+
+    function renderCardsDetalhe(d) {
+      const qtd = d.quantidade || 0;
+      const total = d.total_gasto || 0;
+      const maior = qtd > 0 ? Math.max(...d.despesas.map((x) => x.valor)) : 0;
+
+      // Identificar a Categoria Mais Custosa considerando as despesas filtradas
+      const gastosPorCategoria = {};
+      (d.despesas || []).forEach((item) => {
+        const cat = item.categoria || "Sem Categoria";
+        gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + Number(item.valor || 0);
+      });
+
+      let catMaisCustosa = "Nenhuma";
+      let maiorCustoCat = 0;
+      for (const [cat, val] of Object.entries(gastosPorCategoria)) {
+        if (val > maiorCustoCat) {
+          maiorCustoCat = val;
+          catMaisCustosa = cat;
+        }
+      }
+
+      document.getElementById("card1-label").textContent = "Lançamentos";
+      document.getElementById("card1-valor").textContent = qtd + " despesas";
+      document.getElementById("card1-sub").textContent = "Registros no filtro ativo";
+      const c1Icon = document.getElementById("card1-icon");
+      if (c1Icon) {
+        c1Icon.className = "card-icone ic-azul";
+        c1Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+      }
+
+      document.getElementById("card2-valor").textContent = fmtMoeda(total);
+      document.getElementById("card2-sub").textContent = "Soma total dos gastos";
+
+      document.getElementById("card3-label").textContent = "Categoria Mais Custosa";
+      const card3Val = document.getElementById("card3-valor");
+      card3Val.textContent = catMaisCustosa;
+      card3Val.title = catMaisCustosa;
+      card3Val.style.color = "var(--cinza-800)";
+      card3Val.style.fontSize = catMaisCustosa.length > 16 ? "1.15rem" : "1.45rem";
+      document.getElementById("card3-sub").textContent = maiorCustoCat > 0
+        ? `${fmtMoeda(maiorCustoCat)} no período`
+        : "Nenhum custo no período";
+      const c3Icon = document.getElementById("card3-icon");
+      if (c3Icon) {
+        c3Icon.className = "card-icone ic-roxo";
+        c3Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`;
+      }
+
+      document.getElementById("card4-label").textContent = "Maior Lançamento";
+      document.getElementById("card4-valor").textContent = fmtMoeda(maior);
+      document.getElementById("card4-prog-box").style.display = "none";
+      const card4Sub = document.getElementById("card4-sub");
+      card4Sub.style.display = "block";
+      card4Sub.textContent = "Maior despesa no filtro";
+    }
+
+    function renderCardsDetalheVazio() {
+      document.getElementById("card1-label").textContent = "Lançamentos";
+      document.getElementById("card1-valor").textContent = "0";
+      document.getElementById("card1-sub").textContent = "Registros no filtro ativo";
+      const c1Icon = document.getElementById("card1-icon");
+      if (c1Icon) {
+        c1Icon.className = "card-icone ic-azul";
+        c1Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+      }
+
+      document.getElementById("card2-valor").textContent = "R$ 0,00";
+      document.getElementById("card2-sub").textContent = "Soma total dos gastos";
+
+      document.getElementById("card3-label").textContent = "Categoria Mais Custosa";
+      const card3Val = document.getElementById("card3-valor");
+      card3Val.textContent = "—";
+      card3Val.style.fontSize = "1.45rem";
+      document.getElementById("card3-sub").textContent = "Sem despesas no período";
+      const c3Icon = document.getElementById("card3-icon");
+      if (c3Icon) {
+        c3Icon.className = "card-icone ic-roxo";
+        c3Icon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`;
+      }
+
+      document.getElementById("card4-label").textContent = "Maior Lançamento";
+      document.getElementById("card4-valor").textContent = "R$ 0,00";
+      document.getElementById("card4-prog-box").style.display = "none";
+      const card4Sub = document.getElementById("card4-sub");
+      card4Sub.style.display = "block";
+      card4Sub.textContent = "Sem despesas no período";
+    }
+
+    function renderTabelaDetalhada(despesas) {
+      const tbody = document.getElementById("tbody-detalhada");
+      tbody.innerHTML = "";
+
+      if (!despesas || despesas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhuma despesa encontrada para esta busca.</td></tr>`;
+        return;
+      }
+
+      despesas.forEach((d) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="td-num">${d.data}</td>
+          <td class="td-destaque">${d.descricao}</td>
+          <td><span class="badge-tag badge-setor">${d.setor}</span></td>
+          <td><span class="badge-tag badge-fornecedor">${d.fornecedor}</span></td>
+          <td><span class="badge-tag badge-categoria">${d.categoria}</span></td>
+          <td style="color: var(--cinza-600);">${d.destino || "—"}</td>
+          <td class="td-num td-destaque" style="color: var(--cinza-800)">${d.valor_fmt}</td>
+          <td style="text-align:center; white-space: nowrap;">
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar lançamento" onclick="abrirModalEditarDespesa(${d.id})">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button type="button" class="btn-icone btn-icone-del" title="Excluir despesa" onclick="confirmarExcluirDespesa(${d.id}, '${escapeHtml(d.descricao)}', '${d.valor_fmt}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("estado-loading").style.display = "none";
+      document.getElementById("estado-erro").style.display = "none";
+      document.getElementById("estado-vazio").style.display = "none";
+      document.getElementById("wrap-tabela-resumo").style.display = "none";
+      document.getElementById("wrap-tabela-detalhada").style.display = "";
+    }
+
+    function escapeHtml(text) {
+      return (text || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    }
+
+    // ── Excluir Despesa Individual com SweetAlert2 ─────────────────────────
+    async function confirmarExcluirDespesa(id, descricao, valorFmt) {
+      const result = await Swal.fire({
+        title: 'Excluir despesa?',
+        html: `Deseja realmente excluir o lançamento <b>"${descricao}"</b> no valor de <b>${valorFmt}</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, excluir',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const res = await fetch(`/api/despesas/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          avisarSucesso('Despesa excluída com sucesso!');
+          await carregarListasAuxiliares();
+          await carregarDadosView();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Erro ao excluir', text: data.erro || 'Não foi possível excluir a despesa.' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      }
+    }
+
+    // ── Limpar TODAS as Despesas com SweetAlert2 ────────────────────────────
+    document.getElementById("btn-limpar-todas-despesas").addEventListener("click", async () => {
+      const result = await Swal.fire({
+        title: 'LIMPAR TODAS AS DESPESAS?',
+        html: `<p style="color:#b91c1c; font-weight:bold; margin-bottom:8px;">⚠️ ATENÇÃO: AÇÃO IRREVERSÍVEL!</p>` +
+              `<p>Você está prestes a <b>apagar definitivamente todas as despesas</b> cadastradas no sistema.</p>` +
+              `<small style="color:#6b7280;">Os orçamentos, setores e fornecedores serão preservados.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, apagar tudo!',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const res = await fetch('/api/despesas/limpar-todas', { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Despesas Limpas!',
+            text: data.mensagem,
+            confirmButtonColor: '#DB7E04',
+          });
+          await carregarListasAuxiliares();
+          await carregarDadosView();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Erro ao limpar despesas', text: data.erro || 'Erro desconhecido.' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro de conexão', text: err.message });
+      }
+    });
+
+    // ── Gestão de Setores ──────────────────────────────────────────────────
+    function abrirModalGerirSetores() {
+      renderTabelaSetoresGestao(estado.setores);
+      document.getElementById("modal-gerir-setores").classList.add("aberto");
+    }
+
+    function renderTabelaSetoresGestao(setores) {
+      const tbody = document.getElementById("tbody-setores-gestao");
+      tbody.innerHTML = "";
+
+      if (!setores || setores.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum setor cadastrado.</td></tr>`;
+        return;
+      }
+
+      setores.forEach((s) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="td-destaque">${s.nome}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${s.descricao || "—"}</td>
+          <td style="text-align:center;">
+            <span class="badge ${s.total_despesas > 0 ? 'badge-setor' : 'badge-ok'}">${s.total_despesas}</span>
+          </td>
+          <td class="td-num">${s.total_gasto_fmt}</td>
+          <td style="text-align:center; white-space: nowrap;">
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar setor" onclick="editarSetor(${s.id}, '${escapeHtml(s.nome)}', '${escapeHtml(s.descricao)}')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button type="button" class="btn-icone btn-icone-del" title="Excluir setor" onclick="confirmarExcluirSetor(${s.id}, '${escapeHtml(s.nome)}', ${s.total_despesas})">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById("busca-setor-modal").addEventListener("input", (e) => {
+      const termo = e.target.value.toLowerCase().trim();
+      const filtrados = estado.setores.filter(
+        (s) => s.nome.toLowerCase().includes(termo) || (s.descricao && s.descricao.toLowerCase().includes(termo))
+      );
+      renderTabelaSetoresGestao(filtrados);
+    });
+
+    document.getElementById("btn-abrir-novo-setor-inline").addEventListener("click", async () => {
+      const { value: formValues } = await Swal.fire({
+        title: 'Novo Setor / Departamento',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Setor *</label>` +
+          `<input id="swal-novo-setor-nome" class="swal2-input" placeholder="Ex: Financeiro, TI, RH, Comercial..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição / Centro de Custo (opcional)</label>` +
+          `<input id="swal-novo-setor-desc" class="swal2-input" placeholder="Ex: Centro de Custo 101, Unidade SP..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Cadastrar Setor',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#DB7E04',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-novo-setor-nome').value.trim();
+          const desc = document.getElementById('swal-novo-setor-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome do setor é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch('/api/setores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso(`Setor "${formValues.nome}" cadastrado com sucesso!`);
+          await carregarListasAuxiliares();
+          renderTabelaSetoresGestao(estado.setores);
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao cadastrar setor.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    });
+
+    async function editarSetor(id, nomeAtual, descAtual) {
+      const { value: formValues } = await Swal.fire({
+        title: 'Editar Setor',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Setor *</label>` +
+          `<input id="swal-edit-setor-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição</label>` +
+          `<input id="swal-edit-setor-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar Alterações',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#DB7E04',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-edit-setor-nome').value.trim();
+          const desc = document.getElementById('swal-edit-setor-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome do setor é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch(`/api/setores/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso('Setor atualizado com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaSetoresGestao(estado.setores);
+          carregarDadosView();
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao atualizar.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    }
+
+    async function confirmarExcluirSetor(id, nome, qtdDespesas) {
+      if (qtdDespesas > 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Exclusão Bloqueada',
+          html: `O setor <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
+          confirmButtonColor: '#DB7E04'
+        });
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Excluir Setor?',
+        html: `Deseja realmente remover o setor <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, excluir',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const res = await fetch(`/api/setores/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          avisarSucesso(data.mensagem || 'Setor excluído com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaSetoresGestao(estado.setores);
+          carregarDadosView();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Não foi possível excluir', text: data.erro || 'Erro desconhecido.' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      }
+    }
+
+    // ── Gestão de Fornecedores ─────────────────────────────────────────────
+    function abrirModalGerirFornecedores() {
+      renderTabelaFornecedoresGestao(estado.fornecedores);
+      document.getElementById("modal-gerir-fornecedores").classList.add("aberto");
+    }
+
+    function renderTabelaFornecedoresGestao(fornecedores) {
+      const tbody = document.getElementById("tbody-fornecedores-gestao");
+      tbody.innerHTML = "";
+
+      if (!fornecedores || fornecedores.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum fornecedor cadastrado.</td></tr>`;
+        return;
+      }
+
+      fornecedores.forEach((f) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="td-destaque">${f.nome}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${f.descricao || "—"}</td>
+          <td style="text-align:center;">
+            <span class="badge ${f.total_despesas > 0 ? 'badge-fornecedor' : 'badge-ok'}">${f.total_despesas}</span>
+          </td>
+          <td class="td-num">${f.total_gasto_fmt}</td>
+          <td style="text-align:center; white-space: nowrap;">
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar fornecedor" onclick="editarFornecedor(${f.id}, '${escapeHtml(f.nome)}', '${escapeHtml(f.descricao)}')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button type="button" class="btn-icone btn-icone-del" title="Excluir fornecedor" onclick="confirmarExcluirFornecedor(${f.id}, '${escapeHtml(f.nome)}', ${f.total_despesas})">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById("busca-fornecedor-modal").addEventListener("input", (e) => {
+      const termo = e.target.value.toLowerCase().trim();
+      const filtrados = estado.fornecedores.filter(
+        (f) => f.nome.toLowerCase().includes(termo) || (f.descricao && f.descricao.toLowerCase().includes(termo))
+      );
+      renderTabelaFornecedoresGestao(filtrados);
+    });
+
+    document.getElementById("btn-abrir-novo-fornecedor-inline").addEventListener("click", async () => {
+      const { value: formValues } = await Swal.fire({
+        title: 'Novo Fornecedor',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Fornecedor *</label>` +
+          `<input id="swal-novo-forn-nome" class="swal2-input" placeholder="Ex: Dell, Amazon, Kalunga..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição / Contato (opcional)</label>` +
+          `<input id="swal-novo-forn-desc" class="swal2-input" placeholder="Ex: CNPJ, telefone, serviços..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Cadastrar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#DB7E04',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-novo-forn-nome').value.trim();
+          const desc = document.getElementById('swal-novo-forn-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome do fornecedor é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch('/api/fornecedores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso(`Fornecedor "${formValues.nome}" cadastrado com sucesso!`);
+          await carregarListasAuxiliares();
+          renderTabelaFornecedoresGestao(estado.fornecedores);
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao cadastrar.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    });
+
+    async function editarFornecedor(id, nomeAtual, descAtual) {
+      const { value: formValues } = await Swal.fire({
+        title: 'Editar Fornecedor',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Fornecedor *</label>` +
+          `<input id="swal-edit-forn-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição / Contato</label>` +
+          `<input id="swal-edit-forn-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar Alterações',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#DB7E04',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-edit-forn-nome').value.trim();
+          const desc = document.getElementById('swal-edit-forn-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome do fornecedor é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch(`/api/fornecedores/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso('Fornecedor atualizado com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaFornecedoresGestao(estado.fornecedores);
+          carregarDadosView();
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao atualizar.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    }
+
+    async function confirmarExcluirFornecedor(id, nome, qtdDespesas) {
+      if (qtdDespesas > 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Exclusão Bloqueada',
+          html: `O fornecedor <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
+          confirmButtonColor: '#DB7E04'
+        });
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Excluir Fornecedor?',
+        html: `Deseja realmente remover o fornecedor <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, excluir',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const res = await fetch(`/api/fornecedores/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          avisarSucesso(data.mensagem || 'Fornecedor excluído com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaFornecedoresGestao(estado.fornecedores);
+          carregarDadosView();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Não foi possível excluir', text: data.erro || 'Erro desconhecido.' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      }
+    }
+
+    // ── Gestão de Categorias (Rubricas) ────────────────────────────────────
+    function abrirModalGerirCategorias() {
+      renderTabelaCategoriasGestao(estado.categorias);
+      document.getElementById("modal-gerir-categorias").classList.add("aberto");
+    }
+
+    function renderTabelaCategoriasGestao(categorias) {
+      const tbody = document.getElementById("tbody-categorias-gestao");
+      tbody.innerHTML = "";
+
+      if (!categorias || categorias.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhuma categoria cadastrada.</td></tr>`;
+        return;
+      }
+
+      categorias.forEach((c) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="td-destaque">${c.nome}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${c.descricao || "—"}</td>
+          <td style="text-align:center;">
+            <span class="badge ${c.total_despesas > 0 ? 'badge-categoria' : 'badge-ok'}">${c.total_despesas || 0}</span>
+          </td>
+          <td class="td-num">${c.total_gasto_fmt || fmtMoeda(c.total_gasto || 0)}</td>
+          <td style="text-align:center; white-space: nowrap;">
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar categoria" onclick="editarCategoria(${c.id}, '${escapeHtml(c.nome)}', '${escapeHtml(c.descricao)}')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button type="button" class="btn-icone btn-icone-del" title="Excluir categoria" onclick="confirmarExcluirCategoria(${c.id}, '${escapeHtml(c.nome)}', ${c.total_despesas || 0})">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById("busca-categoria-modal").addEventListener("input", (e) => {
+      const termo = e.target.value.toLowerCase().trim();
+      const filtradas = estado.categorias.filter(
+        (c) => c.nome.toLowerCase().includes(termo) || (c.descricao && c.descricao.toLowerCase().includes(termo))
+      );
+      renderTabelaCategoriasGestao(filtradas);
+    });
+
+    document.getElementById("btn-abrir-nova-categoria-inline").addEventListener("click", async () => {
+      const { value: formValues } = await Swal.fire({
+        title: 'Nova Categoria / Rubrica',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome da Categoria *</label>` +
+          `<input id="swal-nova-cat-nome" class="swal2-input" placeholder="Ex: Assinaturas SaaS, Material de Escritório, Treinamento..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição / Classificação (opcional)</label>` +
+          `<input id="swal-nova-cat-desc" class="swal2-input" placeholder="Ex: Despesas recorrentes com softwares, infraestrutura..." style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Cadastrar Categoria',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#7c3aed',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-nova-cat-nome').value.trim();
+          const desc = document.getElementById('swal-nova-cat-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome da categoria é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch('/api/categorias', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso(`Categoria "${formValues.nome}" cadastrada com sucesso!`);
+          await carregarListasAuxiliares();
+          renderTabelaCategoriasGestao(estado.categorias);
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao cadastrar categoria.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    });
+
+    async function editarCategoria(id, nomeAtual, descAtual) {
+      const { value: formValues } = await Swal.fire({
+        title: 'Editar Categoria',
+        html:
+          `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome da Categoria *</label>` +
+          `<input id="swal-edit-cat-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição</label>` +
+          `<input id="swal-edit-cat-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `</div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar Alterações',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#7c3aed',
+        preConfirm: () => {
+          const nome = document.getElementById('swal-edit-cat-nome').value.trim();
+          const desc = document.getElementById('swal-edit-cat-desc').value.trim();
+          if (!nome) {
+            Swal.showValidationMessage('O nome da categoria é obrigatório');
+            return false;
+          }
+          return { nome, descricao: desc };
+        }
+      });
+
+      if (!formValues) return;
+
+      try {
+        const res = await fetch(`/api/categorias/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso('Categoria atualizada com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaCategoriasGestao(estado.categorias);
+          carregarDadosView();
+        } else {
+          Swal.fire('Erro', data.erro || 'Falha ao atualizar.', 'error');
+        }
+      } catch (err) {
+        Swal.fire('Erro', err.message, 'error');
+      }
+    }
+
+    async function confirmarExcluirCategoria(id, nome, qtdDespesas) {
+      if (qtdDespesas > 0) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Exclusão Bloqueada',
+          html: `A categoria <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-la, remova ou reatribua essas despesas primeiro.`,
+          confirmButtonColor: '#7c3aed'
+        });
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: 'Excluir Categoria?',
+        html: `Deseja realmente remover a categoria <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, excluir',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const res = await fetch(`/api/categorias/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          avisarSucesso(data.mensagem || 'Categoria excluída com sucesso!');
+          await carregarListasAuxiliares();
+          renderTabelaCategoriasGestao(estado.categorias);
+          carregarDadosView();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Não foi possível excluir', text: data.erro || 'Erro desconhecido.' });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      }
+    }
+
+    // ── Estados Auxiliares ─────────────────────────────────────────────────
+    function mostrarLoading() {
+      document.getElementById("estado-loading").style.display = "";
+      document.getElementById("estado-erro").style.display = "none";
+      document.getElementById("estado-vazio").style.display = "none";
+      document.getElementById("wrap-tabela-resumo").style.display = "none";
+      document.getElementById("wrap-tabela-detalhada").style.display = "none";
+    }
+
+    function mostrarErro(msg) {
+      document.getElementById("estado-loading").style.display = "none";
+      document.getElementById("estado-vazio").style.display = "none";
+      document.getElementById("wrap-tabela-resumo").style.display = "none";
+      document.getElementById("wrap-tabela-detalhada").style.display = "none";
+      document.getElementById("erro-detalhe").textContent = msg;
+      document.getElementById("estado-erro").style.display = "";
+    }
+
+    function mostrarVazio() {
+      document.getElementById("estado-loading").style.display = "none";
+      document.getElementById("estado-erro").style.display = "none";
+      document.getElementById("wrap-tabela-resumo").style.display = "none";
+      document.getElementById("wrap-tabela-detalhada").style.display = "none";
+      document.getElementById("estado-vazio").style.display = "";
+    }
+
+    // ── Eventos de Filtro e Presets ────────────────────────────────────────
+    document.getElementById("filtro-data-inicio").addEventListener("change", (e) => {
+      estado.dataInicio = e.target.value;
+      desmarcarPresets();
+      carregarDadosView();
+    });
+
+    document.getElementById("filtro-data-fim").addEventListener("change", (e) => {
+      estado.dataFim = e.target.value;
+      desmarcarPresets();
+      carregarDadosView();
+    });
+
+    function atualizarBadgeFiltros() {
+      let ativos = 0;
+      if (estado.setorId > 0) ativos++;
+      if (estado.fornecedorId > 0) ativos++;
+      if (estado.categoriaId > 0) ativos++;
+
+      const btnToggle = document.getElementById("btn-toggle-filtros");
+      const badge = document.getElementById("badge-filtro-cont");
+
+      if (badge && btnToggle) {
+        if (ativos > 0) {
+          badge.textContent = ativos;
+          badge.style.display = "inline-block";
+          btnToggle.classList.add("com-filtro");
+        } else {
+          badge.style.display = "none";
+          btnToggle.classList.remove("com-filtro");
+        }
+      }
+    }
+
+    // Toggle Gaveta de Filtros Avançados
+    const btnToggleFiltros = document.getElementById("btn-toggle-filtros");
+    const painelFiltros = document.getElementById("painel-filtros-avancados");
+    if (btnToggleFiltros && painelFiltros) {
+      btnToggleFiltros.addEventListener("click", () => {
+        const aberto = painelFiltros.classList.toggle("aberto");
+        btnToggleFiltros.classList.toggle("aberto", aberto);
+      });
+    }
+
+    // Botão Limpar Filtros da Gaveta
+    document.getElementById("btn-limpar-filtros-avancados")?.addEventListener("click", () => {
+      estado.setorId = 0;
+      estado.fornecedorId = 0;
+      estado.categoriaId = 0;
+      document.getElementById("filtro-setor").value = "0";
+      document.getElementById("filtro-fornecedor").value = "0";
+      document.getElementById("filtro-categoria").value = "0";
+      atualizarBadgeFiltros();
+      carregarDadosView();
+    });
+
+    document.getElementById("filtro-setor").addEventListener("change", (e) => {
+      estado.setorId = parseInt(e.target.value, 10);
+      atualizarBadgeFiltros();
+      carregarDadosView();
+    });
+
+    document.getElementById("filtro-fornecedor").addEventListener("change", (e) => {
+      estado.fornecedorId = parseInt(e.target.value, 10);
+      atualizarBadgeFiltros();
+      carregarDadosView();
+    });
+
+    document.getElementById("filtro-categoria").addEventListener("change", (e) => {
+      estado.categoriaId = parseInt(e.target.value, 10);
+      atualizarBadgeFiltros();
+      carregarDadosView();
+    });
+
+    function desmarcarPresets() {
+      document.querySelectorAll(".btn-preset").forEach((btn) => btn.classList.remove("ativo"));
+    }
+
+    // Atalhos Rápidos de Data
+    document.querySelectorAll(".btn-preset").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        desmarcarPresets();
+        btn.classList.add("ativo");
+
+        const tipo = btn.getAttribute("data-preset");
+        const hoje = new Date();
+        const y = hoje.getFullYear();
+        const m = hoje.getMonth() + 1;
+
+        if (tipo === "este-mes") {
+          const ultimoDia = new Date(y, m, 0).getDate();
+          estado.dataInicio = `${y}-${String(m).padStart(2, "0")}-01`;
+          estado.dataFim = `${y}-${String(m).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+        } else if (tipo === "mes-anterior") {
+          const anoPrev = m === 1 ? y - 1 : y;
+          const mesPrev = m === 1 ? 12 : m - 1;
+          const ultimoDia = new Date(anoPrev, mesPrev, 0).getDate();
+          estado.dataInicio = `${anoPrev}-${String(mesPrev).padStart(2, "0")}-01`;
+          estado.dataFim = `${anoPrev}-${String(mesPrev).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+        } else if (tipo === "este-ano" || tipo === "ano-2026") {
+          estado.dataInicio = `${y}-01-01`;
+          estado.dataFim = `${y}-12-31`;
+        } else if (tipo === "ano-anterior" || tipo === "ano-2025") {
+          const anoPrev = y - 1;
+          estado.dataInicio = `${anoPrev}-01-01`;
+          estado.dataFim = `${anoPrev}-12-31`;
+        } else if (tipo === "todos") {
+          estado.dataInicio = "2020-01-01";
+          estado.dataFim = "2030-12-31";
+        }
+
+        document.getElementById("filtro-data-inicio").value = estado.dataInicio;
+        document.getElementById("filtro-data-fim").value = estado.dataFim;
+        carregarDadosView();
+      });
+    });
+
+    // Alternador de Visão
+    document.getElementById("btn-visao-resumo").addEventListener("click", () => {
+      if (estado.visao === "resumida") return;
+      estado.visao = "resumida";
+      document.getElementById("btn-visao-resumo").classList.add("ativo");
+      document.getElementById("btn-visao-detalhada").classList.remove("ativo");
+      carregarDadosView();
+    });
+
+    document.getElementById("btn-visao-detalhada").addEventListener("click", () => {
+      if (estado.visao === "detalhada") return;
+      estado.visao = "detalhada";
+      document.getElementById("btn-visao-detalhada").classList.add("ativo");
+      document.getElementById("btn-visao-resumo").classList.remove("ativo");
+      carregarDadosView();
+    });
+
+    // Busca instantânea na tabela detalhada (mantém ordenação ativa)
+    document.getElementById("filtro-busca-tabela").addEventListener("input", () => {
+      reaplicarOrdenacaoTabela();
+    });
+
+    // ── Controles de Ordenação ─────────────────────────────────────────────
+    document.getElementById("btn-toggle-ordem").addEventListener("click", () => {
+      estado.ordenacao.direcao = estado.ordenacao.direcao === "asc" ? "desc" : "asc";
+      atualizarControlesOrdenacao();
+      if (estado.visao === "detalhada") {
+        reaplicarOrdenacaoTabela();
+      } else if (estado.dadosResumo && estado.dadosResumo.meses) {
+        const { campo, direcao } = estado.ordenacao;
+        renderTabelaResumo(ordenarLista(estado.dadosResumo.meses, campo, direcao));
+      }
+    });
+
+    document.getElementById("sel-ordenar-campo").addEventListener("change", (e) => {
+      estado.ordenacao.campo = e.target.value;
+      atualizarControlesOrdenacao();
+      if (estado.visao === "detalhada") {
+        reaplicarOrdenacaoTabela();
+      } else if (estado.dadosResumo && estado.dadosResumo.meses) {
+        const { campo, direcao } = estado.ordenacao;
+        renderTabelaResumo(ordenarLista(estado.dadosResumo.meses, campo, direcao));
+      }
+    });
+
+    // Clique nos cabeçalhos das colunas
+    document.querySelectorAll("thead th.th-sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const campoCabecalho = th.getAttribute("data-sort");
+        if (estado.ordenacao.campo === campoCabecalho) {
+          // Mesma coluna: inverte direção
+          estado.ordenacao.direcao = estado.ordenacao.direcao === "asc" ? "desc" : "asc";
+        } else {
+          // Nova coluna: define campo, começa decrescente (exceto mês que começa crescente)
+          estado.ordenacao.campo = campoCabecalho;
+          estado.ordenacao.direcao = campoCabecalho === "mes_num" ? "asc" : "desc";
+        }
+        atualizarControlesOrdenacao();
+        if (estado.visao === "detalhada") {
+          reaplicarOrdenacaoTabela();
+        } else if (estado.dadosResumo && estado.dadosResumo.meses) {
+          const { campo, direcao } = estado.ordenacao;
+          renderTabelaResumo(ordenarLista(estado.dadosResumo.meses, campo, direcao));
+        }
+      });
+    });
+
+    // ── Exportação de PDF ──────────────────────────────────────────────────
+    document.getElementById("btn-exportar-pdf").addEventListener("click", () => {
+      const url = `/api/exportar-pdf?${montarQueryParams()}&visao=${estado.visao}`;
+      avisarSucesso("Gerando arquivo PDF do período selecionado...");
+      window.location.href = url;
+    });
+
+
+    // ── Controle de Modais ─────────────────────────────────────────────────
+    function abrirModal(id) {
+      document.getElementById(id).classList.add("aberto");
+    }
+
+    function fecharModal(id) {
+      document.getElementById(id).classList.remove("aberto");
+    }
+
+    document.querySelectorAll("[data-fechar]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        fecharModal(btn.getAttribute("data-fechar"));
+      });
+    });
+
+    document.querySelectorAll(".modal-backdrop").forEach((bd) => {
+      bd.addEventListener("click", (e) => {
+        if (e.target === bd) fecharModal(bd.id);
+      });
+    });
+
+    // ── Abrir Modal Nova Despesa com Campos Totalmente Limpos ─────────────
+    function abrirModalNovaDespesa() {
+      const form = document.getElementById("form-despesa");
+      if (form) form.reset();
+
+      // Limpeza explícita dos campos de texto e valor
+      ["desp-descricao", "desp-valor", "desp-destino"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+
+      // Reset dos selects dinâmicos para a opção padrão ("")
+      ["desp-setor", "desp-fornecedor", "desp-categoria"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+
+      // Data de compra definida para hoje
+      const dtEl = document.getElementById("desp-data");
+      if (dtEl) {
+        dtEl.value = new Date().toISOString().split("T")[0];
+      }
+
+      abrirModal("modal-despesa");
+    }
+
+    ["btn-abrir-modal-despesa", "btn-atalho-nova-despesa"].forEach((id) => {
+      document.getElementById(id)?.addEventListener("click", () => {
+        abrirModalNovaDespesa();
+      });
+    });
+
+    document.getElementById("btn-abrir-modal-gerir-setores").addEventListener("click", () => {
+      abrirModalGerirSetores();
+    });
+
+    document.getElementById("btn-abrir-modal-gerir-fornecedores").addEventListener("click", () => {
+      abrirModalGerirFornecedores();
+    });
+
+    document.getElementById("btn-abrir-modal-gerir-categorias")?.addEventListener("click", () => {
+      abrirModalGerirCategorias();
+    });
+
+    // ── Submit: Cadastrar Despesa ──────────────────────────────────────────
+    document.getElementById("form-despesa").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("btn-salvar-despesa");
+      btn.disabled = true;
+      btn.textContent = "Gravando despesa...";
+
+      const payload = {
+        descricao: document.getElementById("desp-descricao").value.trim(),
+        valor: parseFloat(document.getElementById("desp-valor").value),
+        data_compra: document.getElementById("desp-data").value,
+        setor_id: document.getElementById("desp-setor").value,
+        fornecedor_id: document.getElementById("desp-fornecedor").value,
+        categoria_id: document.getElementById("desp-categoria").value,
+        destino: document.getElementById("desp-destino").value.trim(),
+      };
+
+      try {
+        const res = await fetch("/api/despesas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.erro) {
+          throw new Error(data.erro || "Falha ao registrar despesa.");
+        }
+
+        avisarSucesso("Despesa cadastrada com sucesso!");
+        document.getElementById("form-despesa").reset();
+        ["desp-descricao", "desp-valor", "desp-destino", "desp-setor", "desp-fornecedor", "desp-categoria"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        document.getElementById("desp-data").value = new Date().toISOString().split("T")[0];
+        fecharModal("modal-despesa");
+
+        await carregarListasAuxiliares();
+        await carregarDadosView();
+      } catch (err) {
+        avisarErro(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Gravar Despesa";
+      }
+    });
+
+    // ── Edição de Despesas ─────────────────────────────────────────────────
+    function abrirModalEditarDespesa(id) {
+      const d = estado.despesasLista.find((x) => x.id === id);
+      if (!d) {
+        avisarErro("Lançamento não encontrado.");
+        return;
+      }
+
+      // Popular selects do modal de edição com as listas atuais
+      popularSelect("edit-desp-setor", estado.setores, "id", "nome", "Selecione o setor...");
+      popularSelect("edit-desp-fornecedor", estado.fornecedores, "id", "nome", "Selecione o fornecedor...");
+      popularSelect("edit-desp-categoria", estado.categorias, "id", "nome", "Selecione a categoria...");
+
+      // Preencher campos
+      document.getElementById("edit-desp-id").value = d.id;
+      document.getElementById("edit-desp-descricao").value = d.descricao;
+      document.getElementById("edit-desp-valor").value = d.valor;
+      document.getElementById("edit-desp-data").value = d.data_raw;
+      document.getElementById("edit-desp-setor").value = d.setor_id || "";
+      document.getElementById("edit-desp-fornecedor").value = d.fornecedor_id || "";
+      document.getElementById("edit-desp-categoria").value = d.categoria_id || "";
+      document.getElementById("edit-desp-destino").value = d.destino && d.destino !== "Geral" && d.destino !== "Sede / Uso Geral" ? d.destino : "";
+
+      abrirModal("modal-editar-despesa");
+    }
+
+    document.getElementById("form-editar-despesa").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("edit-desp-id").value;
+      const btn = document.getElementById("btn-salvar-edicao-despesa");
+      btn.disabled = true;
+      btn.textContent = "Salvando alterações...";
+
+      const payload = {
+        descricao: document.getElementById("edit-desp-descricao").value.trim(),
+        valor: parseFloat(document.getElementById("edit-desp-valor").value),
+        data_compra: document.getElementById("edit-desp-data").value,
+        setor_id: document.getElementById("edit-desp-setor").value,
+        fornecedor_id: document.getElementById("edit-desp-fornecedor").value,
+        categoria_id: document.getElementById("edit-desp-categoria").value,
+        destino: document.getElementById("edit-desp-destino").value.trim(),
+      };
+
+      try {
+        const res = await fetch(`/api/despesas/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.erro) {
+          throw new Error(data.erro || "Falha ao atualizar despesa.");
+        }
+
+        avisarSucesso("Lançamento atualizado com sucesso!");
+        fecharModal("modal-editar-despesa");
+
+        await carregarListasAuxiliares();
+        await carregarDadosView();
+      } catch (err) {
+        avisarErro(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Salvar Alterações";
+      }
+    });
+
+    // ── Orçamento por Setor ────────────────────────────────────────────────
+
+    // Tabs do modal de orçamento
+    document.querySelectorAll(".orc-tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.getAttribute("data-tab");
+        document.querySelectorAll(".orc-tab-btn").forEach((b) => b.classList.remove("ativo"));
+        document.querySelectorAll(".orc-tab-painel").forEach((p) => p.classList.remove("ativo"));
+        btn.classList.add("ativo");
+        document.getElementById(`orc-tab-${tab}`).classList.add("ativo");
+      });
+    });
+
+    function popularSelectOrcamento() {
+      const sel = document.getElementById("orc-sel-setor");
+      const valorAtual = sel.value;
+      sel.innerHTML = '<option value="">Selecione um setor...</option>';
+      estado.setores.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.nome;
+        sel.appendChild(opt);
+      });
+      if (valorAtual) sel.value = valorAtual;
+    }
+
+    function abrirModalOrcamentoSetor() {
+      // Inicializar campos
+      const anoAtual = new Date().getFullYear();
+      document.getElementById("orc-sel-ano").value = anoAtual;
+      document.getElementById("orc-resumo-ano").value = anoAtual;
+      popularSelectOrcamento();
+
+      // Garantir que a aba de definição esteja ativa ao abrir
+      document.querySelectorAll(".orc-tab-btn").forEach((b) => b.classList.remove("ativo"));
+      document.querySelectorAll(".orc-tab-painel").forEach((p) => p.classList.remove("ativo"));
+      document.querySelector('.orc-tab-btn[data-tab="mensal"]').classList.add("ativo");
+      document.getElementById("orc-tab-mensal").classList.add("ativo");
+
+      document.getElementById("modal-orcamento-setor").classList.add("aberto");
+    }
+
+    async function carregarOrcamentosMensal() {
+      const setorId = document.getElementById("orc-sel-setor").value;
+      const ano = parseInt(document.getElementById("orc-sel-ano").value, 10);
+
+      if (!setorId) {
+        avisarErro("Selecione um setor antes de carregar.");
+        return;
+      }
+      if (!ano || ano < 2020 || ano > 2035) {
+        avisarErro("Informe um ano válido (2020–2035).");
+        return;
+      }
+
+      const grade = document.getElementById("orc-grade-meses");
+      grade.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--cinza-600);"><div class="spinner" style="margin:0 auto .5rem;"></div>Carregando orçamentos...</div>';
+
+      try {
+        const res = await fetch(`/api/orcamentos-setor?setor_id=${setorId}&ano=${ano}`);
+        const data = await res.json();
+
+        if (data.erro) {
+          grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ ${data.erro}</div>`;
+          return;
+        }
+
+        document.getElementById("orc-barra-opcoes").style.display = "flex";
+        estado.mesesOrcamentoAtual = data.meses || [];
+        renderGradeOrcamentos(data.meses, parseInt(setorId), ano);
+      } catch (e) {
+        grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ Erro ao conectar ao servidor.</div>`;
+      }
+    }
+
+    function renderGradeOrcamentos(meses, setorId, ano) {
+      const grade = document.getElementById("orc-grade-meses");
+      grade.innerHTML = "";
+
+      meses.forEach((m) => {
+        const st = obterStatusOrcamento(m.percentual, m.valor_orcado, m.gasto_real);
+        const pct = Math.min(m.percentual, 100);
+        const corBarra = st.tipo === "acima" ? "var(--vermelho)" : (st.tipo === "perto" ? "#f59e0b" : "var(--verde-hover)");
+
+        const card = document.createElement("div");
+        card.className = "orc-mes-card";
+        card.id = `orc-card-mes-${m.mes}`;
+        card.innerHTML = `
+          <div class="orc-mes-nome">${m.mes_nome}</div>
+          <div class="orc-mes-input-row">
+            <span>R$</span>
+            <input
+              type="number"
+              class="orc-mes-valor-input"
+              id="orc-input-mes-${m.mes}"
+              value="${m.valor_orcado.toFixed(2)}"
+              min="0"
+              step="0.01"
+              placeholder="0,00"
+              data-mes="${m.mes}"
+              data-setor-id="${setorId}"
+              data-ano="${ano}"
+            />
+          </div>
+          <div class="orc-mes-gasto">
+            <span>Gasto: <strong>${m.gasto_real_fmt}</strong></span>
+            <span id="orc-pct-mes-${m.mes}">${m.percentual_fmt}</span>
+          </div>
+          <div class="orc-mes-prog">
+            <div class="orc-mes-prog-fill" id="orc-prog-mes-${m.mes}" style="width:${pct}%; background:${corBarra};"></div>
+          </div>
+          <div class="orc-mes-salvo" id="orc-salvo-mes-${m.mes}">✓ Salvo</div>
+        `;
+        grade.appendChild(card);
+
+        const input = card.querySelector(`#orc-input-mes-${m.mes}`);
+
+        // Replicar em tempo real enquanto digita se o checkbox estiver ativo
+        input.addEventListener("input", () => {
+          const chk = document.getElementById("chk-orc-aplicar-todos");
+          if (chk && chk.checked) {
+            const val = input.value;
+            document.querySelectorAll(".orc-mes-valor-input").forEach((outro) => {
+              if (outro !== input) outro.value = val;
+            });
+          }
+        });
+
+        // Salvar automaticamente ao sair do campo (blur)
+        input.addEventListener("blur", async () => {
+          const chk = document.getElementById("chk-orc-aplicar-todos");
+          if (chk && chk.checked) {
+            await salvarOrcamentoTodosMeses(input, estado.mesesOrcamentoAtual || meses);
+          } else {
+            await salvarOrcamentoMes(input, m);
+          }
+        });
+
+        // Salvar com Enter
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") input.blur();
+        });
+      });
+    }
+
+    async function salvarOrcamentoMes(input, mesObj) {
+      const mes = parseInt(input.dataset.mes, 10);
+      const setorId = parseInt(input.dataset.setorId, 10);
+      const ano = parseInt(input.dataset.ano, 10);
+      const valor = parseFloat(input.value || 0);
+
+      try {
+        const res = await fetch("/api/orcamentos-setor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ setor_id: setorId, ano, mes, valor }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          // Atualizar barra de progresso do mês
+          if (mesObj) {
+            mesObj.valor_orcado = valor;
+            const pct = valor > 0 ? (mesObj.gasto_real / valor) * 100 : 0;
+            const isAlerta = pct >= 80;
+            const pctCap = Math.min(pct, 100);
+            const corBarra = isAlerta ? "var(--vermelho)" : (pctCap > 50 ? "var(--ambar)" : "var(--verde-hover)");
+
+            const pctSpan = document.getElementById(`orc-pct-mes-${mes}`);
+            if (pctSpan) pctSpan.textContent = fmtPct(pct);
+            const prog = document.getElementById(`orc-prog-mes-${mes}`);
+            if (prog) {
+              prog.style.width = pctCap + "%";
+              prog.style.background = corBarra;
+            }
+          }
+
+          // Mostrar indicador de salvo
+          const label = document.getElementById(`orc-salvo-mes-${mes}`);
+          if (label) {
+            label.classList.add("visivel");
+            setTimeout(() => label.classList.remove("visivel"), 2000);
+          }
+
+          // Sincronizar visão resumida da tela principal automaticamente
+          carregarDadosView();
+        } else {
+          avisarErro(data.erro || "Erro ao salvar orçamento.");
+        }
+      } catch (e) {
+        avisarErro("Falha ao comunicar com o servidor.");
+      }
+    }
+
+    async function salvarOrcamentoTodosMeses(input, meses) {
+      const setorId = parseInt(input.dataset.setorId, 10);
+      const ano = parseInt(input.dataset.ano, 10);
+      const valor = parseFloat(input.value || 0);
+
+      try {
+        const res = await fetch("/api/orcamentos-setor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ setor_id: setorId, ano, mes: "todos", aplicar_todos: true, valor: valor }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.sucesso) {
+          // Atualizar todos os cards visualmente
+          (meses || []).forEach((m) => {
+            m.valor_orcado = valor;
+            const pct = valor > 0 ? (m.gasto_real / valor) * 100 : 0;
+            const isAlerta = pct >= 80;
+            const pctCap = Math.min(pct, 100);
+            const corBarra = isAlerta ? "var(--vermelho)" : (pctCap > 50 ? "var(--ambar)" : "var(--verde-hover)");
+
+            const inp = document.getElementById(`orc-input-mes-${m.mes}`);
+            if (inp) inp.value = valor.toFixed(2);
+
+            const pctSpan = document.getElementById(`orc-pct-mes-${m.mes}`);
+            if (pctSpan) pctSpan.textContent = fmtPct(pct);
+
+            const prog = document.getElementById(`orc-prog-mes-${m.mes}`);
+            if (prog) {
+              prog.style.width = pctCap + "%";
+              prog.style.background = corBarra;
+            }
+
+            const label = document.getElementById(`orc-salvo-mes-${m.mes}`);
+            if (label) {
+              label.classList.add("visivel");
+              setTimeout(() => label.classList.remove("visivel"), 2200);
+            }
+          });
+
+          avisarSucesso(`Orçamento de ${fmtMoeda(valor)} aplicado a todos os meses!`);
+
+          // Sincronizar visão resumida da tela principal automaticamente
+          carregarDadosView();
+        } else {
+          avisarErro(data.erro || "Erro ao aplicar orçamento para todos os meses.");
+        }
+      } catch (e) {
+        avisarErro("Falha ao comunicar com o servidor.");
+      }
+    }
+
+    // Listener para quando o usuário marcar/desmarcar a checkbox diretamente
+    document.addEventListener("DOMContentLoaded", () => {
+      const chk = document.getElementById("chk-orc-aplicar-todos");
+      if (chk) {
+        chk.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            const inputs = Array.from(document.querySelectorAll(".orc-mes-valor-input"));
+            if (inputs.length > 0) {
+              // Localiza o primeiro input que tiver valor preenchido > 0, ou o primeiro input
+              const inputComValor = inputs.find((inp) => parseFloat(inp.value) > 0) || inputs[0];
+              const val = inputComValor ? parseFloat(inputComValor.value || 0) : 0;
+              if (val > 0) {
+                inputs.forEach((inp) => {
+                  inp.value = val.toFixed(2);
+                });
+                salvarOrcamentoTodosMeses(inputComValor, estado.mesesOrcamentoAtual || []);
+              }
+            }
+          }
+        });
+      }
+    });
+
+    async function carregarResumoOrcamentos() {
+      const ano = parseInt(document.getElementById("orc-resumo-ano").value, 10);
+      if (!ano || ano < 2020 || ano > 2035) {
+        avisarErro("Informe um ano válido (2020–2035).");
+        return;
+      }
+
+      const grid = document.getElementById("orc-resumo-grid");
+      grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--cinza-600);"><div class="spinner" style="margin:0 auto .5rem;"></div>Carregando resumo...</div>';
+
+      try {
+        const res = await fetch(`/api/orcamentos-setor/resumo?ano=${ano}`);
+        const data = await res.json();
+
+        if (data.erro) {
+          grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ ${data.erro}</div>`;
+          return;
+        }
+
+        renderResumoOrcamentos(data.setores, ano);
+      } catch (e) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ Erro ao conectar ao servidor.</div>`;
+      }
+    }
+
+    function renderResumoOrcamentos(setores, ano) {
+      const grid = document.getElementById("orc-resumo-grid");
+      grid.innerHTML = "";
+
+      if (!setores || setores.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--cinza-600);">Nenhum setor cadastrado.</div>';
+        return;
+      }
+
+      setores.forEach((s) => {
+        const st = obterStatusOrcamento(s.percentual, s.total_orcado, s.total_gasto);
+        const pct = Math.min(s.percentual, 100);
+        const corBarra = st.tipo === "acima" ? "var(--vermelho)" : (st.tipo === "perto" ? "#f59e0b" : "var(--verde-hover)");
+        const semOrcamento = s.total_orcado === 0 && s.total_gasto === 0;
+
+        const card = document.createElement("div");
+        card.className = "orc-resumo-card";
+        card.innerHTML = `
+          <div class="orc-resumo-card-header">
+            <span class="orc-resumo-card-nome">${s.setor_nome}</span>
+            ${semOrcamento
+              ? `<span class="badge" style="background:var(--cinza-100); color:var(--cinza-600); font-size:.72rem; padding:.2rem .55rem; border-radius:99px;">Sem orçamento</span>`
+              : `<span class="badge ${st.classeBadge}" style="font-size:.72rem;">
+                   <span class="dot ${st.classeDot}"></span>
+                   ${st.texto}
+                 </span>`
+            }
+          </div>
+          <div class="orc-resumo-valores">
+            <span>Orçado: <strong>${s.total_orcado_fmt}</strong></span>
+            <span>Gasto: <strong>${s.total_gasto_fmt}</strong></span>
+          </div>
+          <div class="orc-mes-prog">
+            <div class="orc-mes-prog-fill" style="width:${pct}%; background:${corBarra};"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:.75rem; color:var(--cinza-600);">
+            <span>Saldo: <strong style="color:${s.saldo < 0 ? 'var(--vermelho)' : 'var(--verde-hover)'}">${s.saldo_fmt}</strong></span>
+            <span>${s.percentual_fmt} utilizado</span>
+          </div>
+          <button type="button" class="btn btn-outline" style="font-size:.78rem; padding:.3rem .7rem; margin-top:.25rem;"
+            onclick="abrirOrcamentoSetor(${s.setor_id}, '${escapeHtml(s.setor_nome)}', ${ano})">
+            ✏️ Definir Orçamento
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Atalho: clicar em "Definir Orçamento" no card do resumo abre a aba mensal com o setor pré-selecionado
+    function abrirOrcamentoSetor(setorId, nomeSetor, ano) {
+      // Trocar para aba mensal
+      document.querySelectorAll(".orc-tab-btn").forEach((b) => b.classList.remove("ativo"));
+      document.querySelectorAll(".orc-tab-painel").forEach((p) => p.classList.remove("ativo"));
+      document.querySelector('.orc-tab-btn[data-tab="mensal"]').classList.add("ativo");
+      document.getElementById("orc-tab-mensal").classList.add("ativo");
+
+      // Pré-selecionar setor e ano
+      document.getElementById("orc-sel-setor").value = setorId;
+      document.getElementById("orc-sel-ano").value = ano;
+
+      // Carregar automaticamente
+      carregarOrcamentosMensal();
+    }
+
+    // Event listeners do modal de orçamento
+    document.getElementById("btn-carregar-orcamentos").addEventListener("click", carregarOrcamentosMensal);
+    document.getElementById("btn-carregar-resumo-orcamentos").addEventListener("click", carregarResumoOrcamentos);
+
+    // Carregamento automático ao selecionar setor ou trocar ano no modal
+    document.getElementById("orc-sel-setor").addEventListener("change", () => {
+      if (document.getElementById("orc-sel-setor").value) {
+        carregarOrcamentosMensal();
+      }
+    });
+
+    document.getElementById("orc-sel-ano").addEventListener("change", () => {
+      if (document.getElementById("orc-sel-setor").value) {
+        carregarOrcamentosMensal();
+      }
+    });
+
+    document.getElementById("btn-abrir-modal-orcamento-setor").addEventListener("click", () => {
+      abrirModalOrcamentoSetor();
+    });
+
+    
+    // ── Controle do Menu Suspenso do Sistema ────────────────────────────────
+    const btnToggleMenu = document.getElementById("btn-toggle-menu-sistema");
+    const painelMenu = document.getElementById("painel-menu-sistema");
+
+    if (btnToggleMenu && painelMenu) {
+      btnToggleMenu.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const aberto = painelMenu.classList.toggle("aberto");
+        btnToggleMenu.classList.toggle("ativo", aberto);
+      });
+
+      // Fechar ao clicar fora
+      document.addEventListener("click", (e) => {
+        if (!painelMenu.contains(e.target) && !btnToggleMenu.contains(e.target)) {
+          painelMenu.classList.remove("aberto");
+          btnToggleMenu.classList.remove("ativo");
+        }
+      });
+
+      // Fechar ao clicar em qualquer item do menu
+      painelMenu.querySelectorAll(".dropdown-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          painelMenu.classList.remove("aberto");
+          btnToggleMenu.classList.remove("ativo");
+        });
+      });
+
+      // Fechar com ESC
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          painelMenu.classList.remove("aberto");
+          btnToggleMenu.classList.remove("ativo");
+        }
+      });
+    }
+
+    // ── Iniciar App ────────────────────────────────────────────────────────
+    inicializar();
+  </script>
+</body>
+</html>
