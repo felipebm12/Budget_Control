@@ -14,6 +14,7 @@ PASTA_EXPORTACOES.mkdir(exist_ok=True)
 PASTA_LOGS = _DIR_PROJETO / "Logs"
 PASTA_LOGS.mkdir(exist_ok=True)
 PASTA_ASSET = _DIR_SCRIPT / "asset"
+PASTA_FONTES = _DIR_SCRIPT / "fonts"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -38,6 +39,12 @@ def index():
 def favicon():
     """Serve o ícone da aba a partir de asset/favicon.png."""
     return send_from_directory(PASTA_ASSET, "favicon.png", mimetype="image/png")
+
+
+@app.route("/fonts/<path:nome_arquivo>")
+def fonte(nome_arquivo: str):
+    """Serve as fontes locais utilizadas pela interface."""
+    return send_from_directory(PASTA_FONTES, nome_arquivo)
 
 
 # ── Setores (Departamentos / Centros de Custo) ────────────────────────────────

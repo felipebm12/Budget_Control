@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Controle de Despesas Empresarial</title>
+  <title>Controle de Despesas</title>
   <link rel="icon" type="image/png" href="{{ url_for('favicon') }}" />
   <link rel="apple-touch-icon" href="{{ url_for('favicon') }}" />
   <!-- SweetAlert2 CDN -->
@@ -227,7 +227,7 @@
       <!-- Painel Gaveta de Filtros Avançados (Setor, Fornecedor, Categoria) -->
       <div class="painel-filtros-avancados" id="painel-filtros-avancados">
         <div class="painel-filtros-header">
-          <span>🎯 Filtros específicos por departamento, parceiro comercial ou classificação:</span>
+          <span>Refine a análise por departamento, parceiro comercial ou classificação.</span>
           <button type="button" class="btn-limpar-filtros" id="btn-limpar-filtros-avancados" title="Limpar filtros de Setor, Fornecedor e Categoria">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1158,7 +1158,7 @@
         if (st.classeLinha) tr.classList.add(st.classeLinha);
 
         tr.innerHTML = `
-          <td class="td-destaque">${m.mes}</td>
+          <td class="td-destaque td-mes-periodo"></td>
           <td class="td-num">${m.orcado_fmt}</td>
           <td class="td-num">${m.gasto_fmt}</td>
           <td class="td-num" style="color: ${m.saldo < 0 ? 'var(--vermelho)' : 'var(--cinza-800)'}">${m.saldo_fmt}</td>
@@ -1177,6 +1177,15 @@
             </span>
           </td>
         `;
+
+        const btnDetalharMes = document.createElement("button");
+        btnDetalharMes.type = "button";
+        btnDetalharMes.className = "link-mes-detalhe";
+        btnDetalharMes.textContent = m.mes;
+        btnDetalharMes.title = `Abrir despesas de ${m.mes}`;
+        btnDetalharMes.setAttribute("aria-label", `Ver despesas detalhadas de ${m.mes}`);
+        btnDetalharMes.addEventListener("click", () => abrirDetalhamentoMes(m.ano, m.mes_num));
+        tr.querySelector(".td-mes-periodo").appendChild(btnDetalharMes);
         tbody.appendChild(tr);
       });
 
@@ -1185,6 +1194,22 @@
       document.getElementById("estado-vazio").style.display = "none";
       document.getElementById("wrap-tabela-detalhada").style.display = "none";
       document.getElementById("wrap-tabela-resumo").style.display = "";
+    }
+
+    async function abrirDetalhamentoMes(ano, mes) {
+      const ultimoDia = new Date(ano, mes, 0).getDate();
+      estado.dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      estado.dataFim = `${ano}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+      estado.visao = "detalhada";
+
+      document.getElementById("filtro-data-inicio").value = estado.dataInicio;
+      document.getElementById("filtro-data-fim").value = estado.dataFim;
+      document.getElementById("btn-visao-detalhada").classList.add("ativo");
+      document.getElementById("btn-visao-resumo").classList.remove("ativo");
+      desmarcarPresets();
+
+      await carregarDadosView();
+      document.querySelector(".painel-tabela")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     // ── 2. Visão Detalhada ─────────────────────────────────────────────────
