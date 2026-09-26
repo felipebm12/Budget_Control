@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import wraps
 from pathlib import Path
 from datetime import date, datetime
 from flask import Flask, render_template, jsonify, request, send_file, send_from_directory, redirect, url_for, flash
@@ -123,6 +124,117 @@ def api_trocar_senha():
     except Exception as e:
         log.error(f"Erro ao trocar senha: {e}")
         return jsonify({"erro": "Erro interno ao alterar senha."}), 500
+
+
+def admin_required(f):
+    """Garante que apenas usuários do tipo 'admin' acessem o recurso."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.tipo != "admin":
+            return jsonify({"erro": "Acesso negado. Apenas administradores podem executar esta ação."}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ── Gestão de Usuários (Administrador) ───────────────────────────────────────
+
+@app.route("/api/usuarios", methods=["GET"])
+@login_required
+@admin_required
+def api_buscar_usuarios():
+    """Retorna lista de todos os usuários cadastrados."""
+    try:
+        usuarios = database.buscar_usuarios()
+        return jsonify(usuarios)
+    except Exception as e:
+        log.error(f"Erro ao listar usuários: {e}")
+        return jsonify({"erro": "Falha ao consultar usuários."}), 500
+
+
+@app.route("/api/usuarios", methods=["POST"])
+@login_required
+@admin_required
+def api_cadastrar_usuario():
+    """Cadastra um novo usuário no sistema."""
+    dados = request.get_json() or {}
+    username = dados.get("username", "")
+    senha = dados.get("senha", "")
+    nome_completo = dados.get("nome_completo", "")
+    tipo = dados.get("tipo", "usuario")
+
+    try:
+        novo = database.cadastrar_usuario(username, senha, nome_completo, tipo)
+        log.info(f"Usuário criado por {current_user.username}: {novo['username']} ({novo['tipo']})")
+        return jsonify({"sucesso": True, "usuario": novo, "mensagem": f"Usuário '{novo['username']}' cadastrado com sucesso!"}), 201
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao cadastrar usuário: {e}")
+        return jsonify({"erro": "Falha interna ao cadastrar usuário."}), 500
+
+
+@app.route("/api/usuarios/<int:user_id>", methods=["PUT"])
+@login_required
+@admin_required
+def api_atualizar_usuario(user_id: int):
+    """Atualiza dados do usuário (nome, perfil e status ativo/inativo)."""
+    dados = request.get_json() or {}
+    nome_completo = dados.get("nome_completo", "")
+    tipo = dados.get("tipo", "usuario")
+    ativo = bool(dados.get("ativo", True))
+
+    try:
+        atualizado = database.atualizar_usuario(user_id, nome_completo, tipo, ativo, int(current_user.id))
+        log.info(f"Usuário ID={user_id} atualizado por {current_user.username}: {atualizado['username']}")
+        return jsonify({"sucesso": True, "usuario": atualizado, "mensagem": "Usuário atualizado com sucesso!"})
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao atualizar usuário ID={user_id}: {e}")
+        return jsonify({"erro": "Falha interna ao atualizar usuário."}), 500
+
+
+@app.route("/api/usuarios/<int:user_id>/senha", methods=["PUT"])
+@login_required
+@admin_required
+def api_redefinir_senha_usuario(user_id: int):
+    """Redefine a senha de um usuário pelo administrador."""
+    dados = request.get_json() or {}
+    nova_senha = dados.get("nova_senha", "")
+    confirmar = dados.get("confirmar", "")
+
+    if not nova_senha:
+        return jsonify({"erro": "Informe a nova senha."}), 400
+    if nova_senha != confirmar:
+        return jsonify({"erro": "A nova senha e a confirmação não conferem."}), 400
+    if len(nova_senha) < 8:
+        return jsonify({"erro": "A nova senha deve ter pelo menos 8 caracteres."}), 400
+
+    try:
+        resultado = database.redefinir_senha_usuario_por_id(user_id, nova_senha)
+        log.info(f"Senha do usuário {resultado['username']} redefinida por {current_user.username}")
+        return jsonify({"sucesso": True, "mensagem": f"Senha de '{resultado['username']}' redefinida com sucesso!"})
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao redefinir senha do usuário ID={user_id}: {e}")
+        return jsonify({"erro": "Falha interna ao redefinir senha."}), 500
+
+
+@app.route("/api/usuarios/<int:user_id>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_excluir_usuario(user_id: int):
+    """Exclui um usuário do sistema."""
+    try:
+        resultado = database.excluir_usuario(user_id, int(current_user.id))
+        log.info(f"Usuário {resultado['username']} excluído por {current_user.username}")
+        return jsonify({"sucesso": True, "mensagem": f"Usuário '{resultado['username']}' excluído com sucesso!"})
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao excluir usuário ID={user_id}: {e}")
+        return jsonify({"erro": "Falha interna ao excluir usuário."}), 500
 
 
 # ── Rotas de Páginas ─────────────────────────────────────────────────────────

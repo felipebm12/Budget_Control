@@ -1,4 +1,4 @@
-# 💰 BudgetControl SaaS v1.52
+# 💰 BudgetControl SaaS v1.53
 
 Sistema corporativo completo de **Controle Orçamentário e Gestão de Despesas Empresariais** com backend em Python (PostgreSQL / Supabase), geração de relatórios em PDF com ReportLab, interface web responsiva com Flask e CLI via terminal.
 
@@ -70,6 +70,14 @@ Sistema corporativo completo de **Controle Orçamentário e Gestão de Despesas 
   - Header interativo com avatar do usuário autenticado, identificação de perfil (`admin`/`usuario`) e botão de logout.
   - Modal interativo para **Troca de Senha** com validação de complexidade mínima (8 caracteres) e confirmação visual instantânea.
   - Script CLI `reset_senha.py` para redefinição emergencial de senhas diretamente pelo terminal.
+- 👥 **Gestão de Usuários na Interface Web (Painel do Administrador)**:
+  - Painel modal de gerenciamento acessível pelo Menu do Sistema (exclusivo para perfil `admin`).
+  - Busca e filtragem em tempo real de usuários cadastrados por login ou nome completo.
+  - Cadastro de novos operadores com validações de login, senha segura e seleção de perfil (`admin` ou `usuario`).
+  - Edição de perfil e status de ativação/bloqueio com salvamento instantâneo.
+  - Redefinição de senha individual de qualquer operador diretamente pelo administrador.
+  - Travas automáticas de integridade e segurança (proteção contra auto-exclusão, auto-bloqueio e garantia de administrador ativo).
+  - Rotas de API protegidas com o decorator `@admin_required`.
 - 💻 **CLI via Terminal**:
   - Script autônomo `main.py` para geração de relatórios diretos pelo console.
 

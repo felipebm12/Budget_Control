@@ -1143,3 +1143,186 @@ def redefinir_senha_por_username(username: str, nova_senha: str) -> dict:
     except Exception as e:
         log.error(f"Erro ao redefinir senha do usuário '{username}': {e}")
         raise
+
+
+def buscar_usuarios() -> list[dict]:
+    """Retorna a lista de usuários cadastrados (sem o hash de senha)."""
+    query = """
+        SELECT id, username, nome_completo, tipo, ativo, criado_em, ultimo_acesso
+        FROM usuarios
+        ORDER BY nome_completo ASC, username ASC;
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+                return [
+                    {
+                        "id": r[0],
+                        "username": r[1],
+                        "nome_completo": r[2],
+                        "tipo": r[3],
+                        "ativo": r[4],
+                        "criado_em": r[5].strftime("%d/%m/%Y %H:%M") if r[5] else "",
+                        "ultimo_acesso": r[6].strftime("%d/%m/%Y %H:%M") if r[6] else "Nunca acessou",
+                    }
+                    for r in rows
+                ]
+    except Exception as e:
+        log.error(f"Erro ao buscar usuários: {e}")
+        return []
+
+
+def cadastrar_usuario(username: str, senha_plain: str, nome_completo: str, tipo: str = "usuario") -> dict:
+    """Cadastra um novo usuário no banco com senha criptografada via bcrypt."""
+    import re
+    username = (username or "").strip().lower()
+    nome_completo = (nome_completo or "").strip()
+    tipo = (tipo or "usuario").strip().lower()
+
+    if not username or len(username) < 3:
+        raise ValueError("O login deve ter pelo menos 3 caracteres.")
+    if not re.match(r"^[a-z0-9._-]+$", username):
+        raise ValueError("O login deve conter apenas letras, números, pontos, traços ou sublinhados.")
+    if not nome_completo:
+        raise ValueError("O nome completo é obrigatório.")
+    if tipo not in ("admin", "usuario"):
+        raise ValueError("O perfil deve ser 'admin' ou 'usuario'.")
+
+    novo_hash = _hash_senha(senha_plain)
+
+    query = """
+        INSERT INTO usuarios (username, senha_hash, nome_completo, tipo, ativo)
+        VALUES (%s, %s, %s, %s, true)
+        RETURNING id, username, nome_completo, tipo, ativo, criado_em;
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (username, novo_hash, nome_completo, tipo))
+                r = cur.fetchone()
+                conn.commit()
+                return {
+                    "id": r[0],
+                    "username": r[1],
+                    "nome_completo": r[2],
+                    "tipo": r[3],
+                    "ativo": r[4],
+                    "criado_em": r[5].strftime("%d/%m/%Y %H:%M") if r[5] else "",
+                    "ultimo_acesso": "Nunca acessou",
+                }
+    except psycopg2.IntegrityError:
+        raise ValueError(f"O nome de usuário '{username}' já está em uso.")
+    except Exception as e:
+        log.error(f"Erro ao cadastrar usuário: {e}")
+        raise
+
+
+def atualizar_usuario(user_id: int, nome_completo: str, tipo: str, ativo: bool, current_user_id: int) -> dict:
+    """Atualiza dados do usuário (nome, perfil e status ativo/inativo)."""
+    nome_completo = (nome_completo or "").strip()
+    tipo = (tipo or "usuario").strip().lower()
+
+    if not nome_completo:
+        raise ValueError("O nome completo é obrigatório.")
+    if tipo not in ("admin", "usuario"):
+        raise ValueError("Perfil inválido. Escolha 'admin' ou 'usuario'.")
+
+    # Proteção: usuário logado não pode desativar a si mesmo nem remover seu perfil admin
+    if user_id == current_user_id:
+        if not ativo:
+            raise ValueError("Você não pode desativar seu próprio usuário enquanto estiver conectado.")
+        if tipo != "admin":
+            raise ValueError("Você não pode remover seu próprio perfil de administrador.")
+
+    # Se estiver desativando ou rebaixando um admin, garantir que ainda haja pelo menos 1 admin ativo
+    if not ativo or tipo != "admin":
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tipo, ativo FROM usuarios WHERE id = %s;", (user_id,))
+                user_atual = cur.fetchone()
+                if user_atual and user_atual[0] == "admin" and user_atual[1]:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM usuarios WHERE tipo = 'admin' AND ativo = true AND id != %s;",
+                        (user_id,)
+                    )
+                    outros_admins = cur.fetchone()[0]
+                    if outros_admins == 0:
+                        raise ValueError("Não é possível alterar este usuário: o sistema deve possuir pelo menos um administrador ativo.")
+
+    query = """
+        UPDATE usuarios
+        SET nome_completo = %s, tipo = %s, ativo = %s
+        WHERE id = %s
+        RETURNING id, username, nome_completo, tipo, ativo;
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (nome_completo, tipo, ativo, user_id))
+                r = cur.fetchone()
+                if not r:
+                    raise ValueError("Usuário não encontrado.")
+                conn.commit()
+                return {
+                    "id": r[0],
+                    "username": r[1],
+                    "nome_completo": r[2],
+                    "tipo": r[3],
+                    "ativo": r[4],
+                }
+    except ValueError:
+        raise
+    except Exception as e:
+        log.error(f"Erro ao atualizar usuário ID={user_id}: {e}")
+        raise
+
+
+def redefinir_senha_usuario_por_id(user_id: int, nova_senha: str) -> dict:
+    """Redefine a senha de um usuário pelo seu ID."""
+    novo_hash = _hash_senha(nova_senha)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE usuarios SET senha_hash = %s WHERE id = %s RETURNING id, username, tipo;",
+                    (novo_hash, user_id)
+                )
+                r = cur.fetchone()
+                if not r:
+                    raise ValueError("Usuário não encontrado.")
+                conn.commit()
+                return {"id": r[0], "username": r[1], "tipo": r[2]}
+    except ValueError:
+        raise
+    except Exception as e:
+        log.error(f"Erro ao redefinir senha do usuário ID={user_id}: {e}")
+        raise
+
+
+def excluir_usuario(user_id: int, current_user_id: int) -> dict:
+    """Exclui um usuário do sistema (com proteções de integridade)."""
+    if user_id == current_user_id:
+        raise ValueError("Você não pode excluir sua própria conta enquanto estiver conectado.")
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT username, tipo FROM usuarios WHERE id = %s;", (user_id,))
+            u = cur.fetchone()
+            if not u:
+                raise ValueError("Usuário não encontrado.")
+            username, tipo = u[0], u[1]
+
+            if tipo == "admin":
+                cur.execute(
+                    "SELECT COUNT(*) FROM usuarios WHERE tipo = 'admin' AND ativo = true AND id != %s;",
+                    (user_id,)
+                )
+                outros = cur.fetchone()[0]
+                if outros == 0:
+                    raise ValueError("Não é possível excluir o único administrador ativo do sistema.")
+
+            cur.execute("DELETE FROM usuarios WHERE id = %s;", (user_id,))
+            conn.commit()
+            return {"id": user_id, "username": username}

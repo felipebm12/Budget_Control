@@ -231,6 +231,14 @@
       background: var(--azul);
       color: var(--branco);
     }
+    .btn-icone-key {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .btn-icone-key:hover {
+      background: #f59e0b;
+      color: var(--branco);
+    }
 
     /* ── Barra de Filtros Dinâmicos ─────────────────────────────────── */
     .toolbar-container {
@@ -777,6 +785,10 @@
     .badge-setor     { background: var(--ambar-bg); color: var(--ambar); }
     .badge-fornecedor{ background: var(--azul-bg);  color: var(--azul);  }
     .badge-categoria { background: var(--roxo-bg);  color: var(--roxo);  }
+    .badge-admin     { background: #e0e7ff; color: #4338ca; }
+    .badge-usuario   { background: #f1f5f9; color: #475569; }
+    .badge-ativo     { background: var(--verde-bg); color: var(--verde-hover); }
+    .badge-inativo   { background: #f3f4f6; color: #9ca3af; }
 
     .dot {
       width: 6px; height: 6px;

@@ -46,7 +46,7 @@ from pdf_fonts import FONT, FONT_BOLD, garantir_fontes
 FONTE_DOCX = "Google Sans"
 
 SAIDA_DIR = _DIR_ATUAL if _DIR_ATUAL.name == "Documentation" else _DIR_ATUAL / "Documentation"
-VERSAO = "1.5"
+VERSAO = "1.53"
 DATA_DOC = date.today().strftime("%d/%m/%Y")
 
 COR_CINZA = colors.HexColor("#A1A1A1")
@@ -73,6 +73,10 @@ ENDPOINTS = [
     ["POST", "/api/orcamentos-setor", "Salva teto mensal; aplicar_todos replica os 12 meses."],
     ["GET", "/api/orcamentos-setor/resumo", "Comparativo anual orçado × gasto por setor."],
     ["GET", "/api/exportar-pdf", "Gera PDF resumido ou detalhado com os filtros ativos."],
+    ["POST", "/api/trocar-senha", "Altera a senha do próprio usuário autenticado."],
+    ["GET/POST", "/api/usuarios", "Lista ou cadastra usuários (exclusivo admin)."],
+    ["PUT/DELETE", "/api/usuarios/<id>", "Atualiza ou exclui usuário (exclusivo admin)."],
+    ["PUT", "/api/usuarios/<id>/senha", "Redefine senha de usuário (exclusivo admin)."],
 ]
 
 
