@@ -1,4 +1,4 @@
-# 💰 BudgetControl SaaS
+# 💰 BudgetControl SaaS v1.52
 
 Sistema corporativo completo de **Controle Orçamentário e Gestão de Despesas Empresariais** com backend em Python (PostgreSQL / Supabase), geração de relatórios em PDF com ReportLab, interface web responsiva com Flask e CLI via terminal.
 
@@ -59,8 +59,17 @@ Sistema corporativo completo de **Controle Orçamentário e Gestão de Despesas 
 - 📥 **Exportação em PDF**:
   - Geração de relatório com 1 clique respeitando exatamente os filtros ativos (datas, setor, fornecedor, categoria e visão selecionada).
   - Arquivos salvos automaticamente na pasta `Exportações/` com timestamp.
-- 🚨 **Alertas Orçamentários**:
-  - Alerta visual automático (`OK` / `ALERTA`) baseado no percentual limite configurado (padrão 80%).
+- 🚨 **Status e Alertas Orçamentários**:
+  - Indicadores visuais dinâmicos em 3 faixas percentuais com badges e barras de progresso:
+    - 🟢 **Dentro do orçamento**: consumo abaixo de 80% do teto definido.
+    - 🟡 **Perto do orçamento**: consumo entre 80% e 99%, sinalizando atenção preventiva.
+    - 🔴 **Acima do orçamento**: consumo em 100% ou superior, com alerta visual de estouro orçamentário.
+- 🔐 **Autenticação & Controle de Acesso**:
+  - Sistema completo de login baseado em sessões seguras com `Flask-Login` e senhas com hash `bcrypt`.
+  - Proteção de todas as rotas e endpoints da API via decorator `@login_required`.
+  - Header interativo com avatar do usuário autenticado, identificação de perfil (`admin`/`usuario`) e botão de logout.
+  - Modal interativo para **Troca de Senha** com validação de complexidade mínima (8 caracteres) e confirmação visual instantânea.
+  - Script CLI `reset_senha.py` para redefinição emergencial de senhas diretamente pelo terminal.
 - 💻 **CLI via Terminal**:
   - Script autônomo `main.py` para geração de relatórios diretos pelo console.
 
@@ -71,13 +80,15 @@ Sistema corporativo completo de **Controle Orçamentário e Gestão de Despesas 
 ```
 BudgetControl_v1.00/
 ├── DB scripts/
+│   ├── add_usuarios.sql           # Migração da tabela de usuários e admin inicial
 │   ├── inserts.sql
 │   ├── migrationwithupdates.sql   # Tabelas base, constraints e triggers
 │   ├── rollbacksec.sql            # Script de reversão
 │   └── teste.sql
 ├── Documentation/
-│   ├── budget control documentation.docx
-│   └── budget control documentation.pdf
+│   ├── BudgetControl_Documentacao_Sistema_v1.00.docx
+│   ├── BudgetControl_Documentacao_Sistema_v1.00.pdf
+│   └── gerar_documentacao.py      # Gerador automatizado de documentação
 ├── Exportações/                   # PDFs gerados pelo sistema
 ├── Logs/                          # Arquivos de log
 ├── README.md                      # Documentação completa
@@ -89,12 +100,14 @@ BudgetControl_v1.00/
     ├── report.py                  # Geração de PDFs com ReportLab (resumido e detalhado)
     ├── app.py                     # Servidor Web e API REST (Flask)
     ├── main.py                    # Script CLI para terminal
+    ├── reset_senha.py             # CLI para redefinição de senhas
     ├── requirements.txt           # Dependências Python
     ├── static/
     │   └── css/
     │       └── style.css          # Estilos desacoplados do dashboard
     └── templates/
-        └── index.html             # Interface Web do Dashboard
+        ├── index.html             # Interface Web do Dashboard
+        └── login.html             # Tela de Login Responsiva
 ```
 
 ---

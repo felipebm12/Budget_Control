@@ -1555,3 +1555,66 @@
     }
 
     .link-mes-detalhe:hover::after { transform: translateX(3px); }
+
+    /* ── Usuário Autenticado no Header ────────────────────────────── */
+    .usuario-header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      color: var(--branco);
+      font-size: 0.8rem;
+    }
+
+    .usuario-header-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--verde);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: var(--branco);
+      text-transform: uppercase;
+    }
+
+    .usuario-header-nome {
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .usuario-header-tag {
+      background: rgba(255, 255, 255, 0.2);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 10px;
+    }
+
+    .btn-header-logout {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.18s ease;
+    }
+
+    .btn-header-logout:hover {
+      background: var(--vermelho);
+      border-color: var(--vermelho);
+      color: var(--branco);
+    }

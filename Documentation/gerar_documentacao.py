@@ -27,14 +27,25 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-_DIR_PYTHON = Path(__file__).resolve().parent.parent / "python sections"
+_DIR_ATUAL = Path(__file__).resolve().parent
+_DIR_PYTHON = _DIR_ATUAL / "python sections"
+
+# O gerador pode ser executado pela raiz do projeto ou pela pasta Documentation.
+if not _DIR_PYTHON.is_dir():
+    _DIR_PYTHON = _DIR_ATUAL.parent / "python sections"
+
+if not _DIR_PYTHON.is_dir():
+    raise FileNotFoundError(
+        "Não foi possível localizar a pasta 'python sections' do BudgetControl."
+    )
+
 if str(_DIR_PYTHON) not in sys.path:
     sys.path.insert(0, str(_DIR_PYTHON))
 from pdf_fonts import FONT, FONT_BOLD, garantir_fontes
 
 FONTE_DOCX = "Google Sans"
 
-SAIDA_DIR = Path(__file__).resolve().parent
+SAIDA_DIR = _DIR_ATUAL if _DIR_ATUAL.name == "Documentation" else _DIR_ATUAL / "Documentation"
 VERSAO = "1.5"
 DATA_DOC = date.today().strftime("%d/%m/%Y")
 

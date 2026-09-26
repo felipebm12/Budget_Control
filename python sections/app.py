@@ -2,7 +2,8 @@ import logging
 import os
 from pathlib import Path
 from datetime import date, datetime
-from flask import Flask, render_template, jsonify, request, send_file, send_from_directory
+from flask import Flask, render_template, jsonify, request, send_file, send_from_directory, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import database
 import report
 
@@ -25,14 +26,112 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", os.urandom(32))
+
+# ── Flask-Login ───────────────────────────────────────────────────────────────
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+login_manager.login_message = "Faça login para acessar o sistema."
+
+
+class Usuario(UserMixin):
+    """Representa o usuário autenticado na sessão Flask."""
+    def __init__(self, data: dict):
+        self.id = str(data["id"])
+        self.username = data["username"]
+        self.nome_completo = data["nome_completo"]
+        self.tipo = data["tipo"]
+
+
+@login_manager.user_loader
+def load_user(user_id: str):
+    """Callback do flask-login: recarrega o usuário pelo ID da sessão."""
+    try:
+        usuario = database.buscar_usuario_por_username_por_id(int(user_id))
+        if usuario:
+            return Usuario(usuario)
+    except Exception:
+        pass
+    return None
+
+
+# ── Rotas de Autenticação ────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Exibe e processa o formulário de login."""
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    erro = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        senha = request.form.get("senha") or ""
+
+        usuario_data = database.buscar_usuario_por_username(username)
+        if usuario_data and database.verificar_senha(senha, usuario_data["senha_hash"]):
+            usuario_obj = Usuario(usuario_data)
+            login_user(usuario_obj, remember=False)
+            database.atualizar_ultimo_acesso(usuario_data["id"])
+            log.info(f"Login bem-sucedido: {username}")
+            next_page = request.args.get("next")
+            return redirect(next_page or url_for("index"))
+        else:
+            erro = "Usuário ou senha incorretos."
+            log.warning(f"Tentativa de login falhou para: '{username}'")
+
+    return render_template("login.html", erro=erro)
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    """Encerra a sessão do usuário."""
+    log.info(f"Logout: {current_user.username}")
+    logout_user()
+    return redirect(url_for("login"))
+
+
+@app.route("/api/trocar-senha", methods=["POST"])
+@login_required
+def api_trocar_senha():
+    """Troca a senha do usuário autenticado."""
+    data = request.get_json() or {}
+    senha_atual = data.get("senha_atual") or ""
+    nova_senha = data.get("nova_senha") or ""
+    confirmar = data.get("confirmar") or ""
+
+    if not senha_atual or not nova_senha:
+        return jsonify({"erro": "Preencha todos os campos."}), 400
+    if nova_senha != confirmar:
+        return jsonify({"erro": "A nova senha e a confirmação não conferem."}), 400
+    if len(nova_senha) < 8:
+        return jsonify({"erro": "A nova senha deve ter pelo menos 8 caracteres."}), 400
+
+    usuario_data = database.buscar_usuario_por_username(current_user.username)
+    if not usuario_data or not database.verificar_senha(senha_atual, usuario_data["senha_hash"]):
+        return jsonify({"erro": "Senha atual incorreta."}), 403
+
+    try:
+        database.trocar_senha(int(current_user.id), nova_senha)
+        log.info(f"Senha alterada: {current_user.username}")
+        return jsonify({"sucesso": True, "mensagem": "Senha alterada com sucesso!"})
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao trocar senha: {e}")
+        return jsonify({"erro": "Erro interno ao alterar senha."}), 500
 
 
 # ── Rotas de Páginas ─────────────────────────────────────────────────────────
 
 @app.route("/")
+@login_required
 def index():
     """Renderiza o Dashboard principal."""
-    return render_template("index.html")
+    return render_template("index.html", usuario=current_user)
 
 
 @app.route("/favicon.ico")
@@ -50,6 +149,7 @@ def fonte(nome_arquivo: str):
 # ── Setores (Departamentos / Centros de Custo) ────────────────────────────────
 
 @app.route("/api/setores", methods=["GET", "POST"])
+@login_required
 def api_setores():
     """GET: Lista todos os setores. POST: Cadastra novo setor."""
     if request.method == "POST":
@@ -76,6 +176,7 @@ def api_setores():
 
 
 @app.route("/api/setores/<int:setor_id>", methods=["PUT", "DELETE"])
+@login_required
 def api_setor_item(setor_id: int):
     """PUT: Atualiza setor. DELETE: Exclui setor (se desimpedido)."""
     if request.method == "PUT":
@@ -107,6 +208,7 @@ def api_setor_item(setor_id: int):
 # ── Fornecedores (Onde foi gasto o dinheiro) ──────────────────────────────────
 
 @app.route("/api/fornecedores", methods=["GET", "POST"])
+@login_required
 def api_fornecedores():
     """GET: Lista todos os fornecedores. POST: Cadastra novo fornecedor."""
     if request.method == "POST":
@@ -133,6 +235,7 @@ def api_fornecedores():
 
 
 @app.route("/api/fornecedores/<int:fornecedor_id>", methods=["PUT", "DELETE"])
+@login_required
 def api_fornecedor_item(fornecedor_id: int):
     """PUT: Atualiza fornecedor. DELETE: Exclui fornecedor (se desimpedido)."""
     if request.method == "PUT":
@@ -165,6 +268,7 @@ def api_fornecedor_item(fornecedor_id: int):
 
 @app.route("/api/categorias", methods=["GET", "POST"])
 @app.route("/api/rubricas", methods=["GET", "POST"])
+@login_required
 def api_categorias():
     """GET: Retorna lista de categorias cadastradas. POST: Cadastra nova categoria."""
     if request.method == "POST":
@@ -191,6 +295,7 @@ def api_categorias():
 
 
 @app.route("/api/categorias/<int:categoria_id>", methods=["PUT", "DELETE"])
+@login_required
 def api_categoria_item(categoria_id: int):
     """PUT: Atualiza categoria. DELETE: Exclui categoria (se desimpedida)."""
     if request.method == "PUT":
@@ -222,6 +327,7 @@ def api_categoria_item(categoria_id: int):
 # ── Despesas ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/despesas", methods=["GET", "POST"])
+@login_required
 def api_despesas():
     """GET: Lista despesas filtradas. POST: Cadastra nova despesa empresarial."""
     if request.method == "POST":
@@ -301,6 +407,7 @@ def api_despesas():
 
 
 @app.route("/api/despesas/<int:despesa_id>", methods=["PUT", "DELETE"])
+@login_required
 def api_despesa_item(despesa_id: int):
     """PUT: Atualiza lançamento de despesa. DELETE: Exclui despesa pelo ID."""
     if request.method == "PUT":
@@ -363,6 +470,7 @@ def api_despesa_item(despesa_id: int):
 
 
 @app.route("/api/despesas/limpar-todas", methods=["DELETE", "POST"])
+@login_required
 def api_despesas_limpar_todas():
     """Remove todas as despesas cadastradas no sistema."""
     try:
@@ -380,6 +488,7 @@ def api_despesas_limpar_todas():
 # ── Orçamentos por Setor ──────────────────────────────────────────────────────
 
 @app.route("/api/orcamentos-setor", methods=["GET", "POST"])
+@login_required
 def api_orcamentos_setor():
     """
     GET  /api/orcamentos-setor?setor_id=X&ano=YYYY
@@ -456,6 +565,7 @@ def api_orcamentos_setor():
 
 
 @app.route("/api/orcamentos-setor/resumo", methods=["GET"])
+@login_required
 def api_orcamentos_setor_resumo():
     """
     GET /api/orcamentos-setor/resumo?ano=YYYY
@@ -473,6 +583,7 @@ def api_orcamentos_setor_resumo():
 # ── Dados Consolidados (Visão Resumida) ──────────────────────────────────────
 
 @app.route("/api/dados")
+@login_required
 def api_dados():
     """Retorna dados consolidados mês a mês no intervalo de datas."""
     ano_atual = datetime.now().year
@@ -513,6 +624,7 @@ def api_dados():
 # ── Rota de Exportação de PDF ────────────────────────────────────────────────
 
 @app.route("/api/exportar-pdf")
+@login_required
 def api_exportar_pdf():
     """Gera e faz o download do arquivo PDF conforme o intervalo dinâmico de datas."""
     ano_atual = datetime.now().year

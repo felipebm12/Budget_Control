@@ -2,7 +2,9 @@ import logging
 from datetime import datetime, date
 from decimal import Decimal
 import psycopg2
+import bcrypt
 import config
+
 
 log = logging.getLogger(__name__)
 
@@ -1003,3 +1005,141 @@ def limpar_todas_despesas() -> int:
             cur.execute("DELETE FROM despesas;")
             conn.commit()
             return total
+
+
+# ── Autenticação de Usuários ──────────────────────────────────────────────────
+
+def buscar_usuario_por_username(username: str) -> dict | None:
+    """Retorna o dict do usuário pelo username, ou None se não encontrado / inativo."""
+    query = """
+        SELECT id, username, senha_hash, nome_completo, tipo, ativo
+        FROM usuarios
+        WHERE username = %s AND ativo = true
+        LIMIT 1;
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (username,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "id": row[0],
+                    "username": row[1],
+                    "senha_hash": row[2],
+                    "nome_completo": row[3],
+                    "tipo": row[4],
+                    "ativo": row[5],
+                }
+    except Exception as e:
+        log.error(f"Erro ao buscar usuário '{username}': {e}")
+        return None
+
+
+def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
+    """Retorna o dict do usuário pelo ID (usado pelo user_loader do flask-login)."""
+    query = """
+        SELECT id, username, senha_hash, nome_completo, tipo, ativo
+        FROM usuarios
+        WHERE id = %s AND ativo = true
+        LIMIT 1;
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (user_id,))
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "id": row[0],
+                    "username": row[1],
+                    "senha_hash": row[2],
+                    "nome_completo": row[3],
+                    "tipo": row[4],
+                    "ativo": row[5],
+                }
+    except Exception as e:
+        log.error(f"Erro ao buscar usuário ID={user_id}: {e}")
+        return None
+
+
+def verificar_senha(senha_plain: str, senha_hash: str) -> bool:
+    """Verifica se a senha em texto plano corresponde ao hash bcrypt armazenado."""
+    try:
+        return bcrypt.checkpw(senha_plain.encode("utf-8"), senha_hash.encode("utf-8"))
+    except Exception as e:
+        log.error(f"Erro ao verificar senha: {e}")
+        return False
+
+
+def _hash_senha(nova_senha: str) -> str:
+    """Gera hash bcrypt (cost 12) após validar o tamanho mínimo."""
+    if len(nova_senha) < 8:
+        raise ValueError("A nova senha deve ter pelo menos 8 caracteres.")
+    return bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
+
+
+def atualizar_ultimo_acesso(user_id: int) -> None:
+    """Registra o timestamp do último acesso bem-sucedido do usuário."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE usuarios SET ultimo_acesso = now() WHERE id = %s;",
+                    (user_id,)
+                )
+                conn.commit()
+    except Exception as e:
+        log.error(f"Erro ao atualizar último acesso (user_id={user_id}): {e}")
+
+
+def trocar_senha(user_id: int, nova_senha: str) -> None:
+    """Gera novo hash bcrypt e atualiza a senha do usuário no banco."""
+    novo_hash = _hash_senha(nova_senha)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE usuarios SET senha_hash = %s WHERE id = %s;",
+                    (novo_hash, user_id)
+                )
+                conn.commit()
+    except Exception as e:
+        log.error(f"Erro ao trocar senha (user_id={user_id}): {e}")
+        raise
+
+
+def redefinir_senha_por_username(username: str, nova_senha: str) -> dict:
+    """
+    Redefine a senha sem exigir a senha atual (recuperação via CLI).
+    Reativa a conta se estiver inativa. Não registra a senha em log.
+    """
+    username = (username or "").strip()
+    if not username:
+        raise ValueError("Informe o nome de usuário.")
+    novo_hash = _hash_senha(nova_senha)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE usuarios
+                       SET senha_hash = %s,
+                           ativo = true
+                     WHERE username = %s
+                 RETURNING id, username, tipo;
+                    """,
+                    (novo_hash, username),
+                )
+                row = cur.fetchone()
+                conn.commit()
+                if not row:
+                    raise ValueError(f"Usuário '{username}' não encontrado.")
+                return {"id": row[0], "username": row[1], "tipo": row[2]}
+    except ValueError:
+        raise
+    except Exception as e:
+        log.error(f"Erro ao redefinir senha do usuário '{username}': {e}")
+        raise
