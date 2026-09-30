@@ -8,9 +8,9 @@
   <link rel="apple-touch-icon" href="{{ url_for('favicon') }}" />
   <!-- SweetAlert2 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- Folha de Estilos Externa -->
+  <!-- Folha de Estilos Externa -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-  </head>
+</head>
 <body>
 
   <!-- ── Header Principal ────────────────────────────────────────────────── -->
@@ -386,7 +386,7 @@
         </div>
 
         <div class="painel-badges">
-          <input type="text" id="filtro-busca-tabela" class="busca-input" placeholder="🔍 Buscar por descrição, setor, fornecedor, categoria..." style="display:none" />
+          <input type="text" id="filtro-busca-tabela" class="busca-input" placeholder="Buscar por descrição, setor, fornecedor, categoria..." style="display:none" />
 
           <!-- Controle de Ordenação da Grid -->
           <div class="grupo-ordenacao" id="grupo-ordenacao">
@@ -434,13 +434,13 @@
 
       <!-- Error State -->
       <div id="estado-erro" class="estado-box" style="display:none; color: var(--vermelho)">
-        <p>⚠️ Ocorreu um erro ao carregar os dados.</p>
+        <p>Ocorreu um erro ao carregar os dados.</p>
         <small id="erro-detalhe" style="opacity:.8"></small>
       </div>
 
       <!-- Empty State -->
       <div id="estado-vazio" class="estado-box" style="display:none">
-        <p>📭 Nenhum registro encontrado para este filtro.</p>
+        <p>Nenhum registro encontrado para este filtro.</p>
       </div>
 
       <!-- Tabela Resumida -->
@@ -484,7 +484,7 @@
 
   <!-- ── Rodapé ──────────────────────────────────────────────────────────── -->
   <footer>
-    Controle de Despesas v1.53 &nbsp;·&nbsp; Projeto "Front VibeCoded" &nbsp;·&nbsp; Sistema Integrado de Controle de Despesas Empresarial
+    Controle de Despesas v1.53 &nbsp;·&nbsp; Sistema Integrado de Controle Orçamentário Empresarial
   </footer>
 
   <!-- ── Modal: Cadastrar Nova Despesa ────────────────────────────────────── -->
@@ -614,12 +614,12 @@
   <div class="modal-backdrop" id="modal-gerir-setores">
     <div class="modal-card modal-card-lg">
       <div class="modal-header">
-        <h3>🏷️ Gerenciamento de Setores (Departamentos)</h3>
+        <h3>Gerenciamento de Setores (Departamentos)</h3>
         <button class="btn-fechar" data-fechar="modal-gerir-setores">&times;</button>
       </div>
       <div class="modal-body">
         <div class="gestao-top-bar">
-          <input type="text" id="busca-setor-modal" class="busca-input" placeholder="🔍 Filtrar setores..." />
+          <input type="text" id="busca-setor-modal" class="busca-input" placeholder="Filtrar setores..." />
           <button type="button" class="btn btn-primario" id="btn-abrir-novo-setor-inline">
             + Novo Setor
           </button>
@@ -650,12 +650,12 @@
   <div class="modal-backdrop" id="modal-gerir-fornecedores">
     <div class="modal-card modal-card-lg">
       <div class="modal-header">
-        <h3>🏢 Gerenciamento de Fornecedores</h3>
+        <h3>Gerenciamento de Fornecedores</h3>
         <button class="btn-fechar" data-fechar="modal-gerir-fornecedores">&times;</button>
       </div>
       <div class="modal-body">
         <div class="gestao-top-bar">
-          <input type="text" id="busca-fornecedor-modal" class="busca-input" placeholder="🔍 Filtrar fornecedores..." />
+          <input type="text" id="busca-fornecedor-modal" class="busca-input" placeholder="Filtrar fornecedores..." />
           <button type="button" class="btn btn-primario" id="btn-abrir-novo-fornecedor-inline">
             + Novo Fornecedor
           </button>
@@ -686,12 +686,12 @@
   <div class="modal-backdrop" id="modal-gerir-categorias">
     <div class="modal-card modal-card-lg">
       <div class="modal-header">
-        <h3>🏷️ Gerenciamento de Categorias (Rubricas)</h3>
+        <h3>Gerenciamento de Categorias (Rubricas)</h3>
         <button class="btn-fechar" data-fechar="modal-gerir-categorias">&times;</button>
       </div>
       <div class="modal-body">
         <div class="gestao-top-bar">
-          <input type="text" id="busca-categoria-modal" class="busca-input" placeholder="🔍 Filtrar categorias..." />
+          <input type="text" id="busca-categoria-modal" class="busca-input" placeholder="Filtrar categorias..." />
           <button type="button" class="btn btn-primario" id="btn-abrir-nova-categoria-inline" style="background:#7c3aed; border-color:#7c3aed;">
             + Nova Categoria
           </button>
@@ -722,15 +722,15 @@
   <div class="modal-backdrop" id="modal-orcamento-setor">
     <div class="modal-card" style="max-width: 860px;">
       <div class="modal-header">
-        <h3>📊 Orçamento por Setor</h3>
+        <h3>Orçamento por Setor</h3>
         <button class="btn-fechar" data-fechar="modal-orcamento-setor">&times;</button>
       </div>
       <div class="modal-body">
 
         <!-- Tabs -->
         <div class="orc-tabs">
-          <button class="orc-tab-btn ativo" data-tab="mensal">📅 Definir Orçamento Mensal</button>
-          <button class="orc-tab-btn" data-tab="resumo">📈 Resumo por Setor</button>
+          <button class="orc-tab-btn ativo" data-tab="mensal">Definir Orçamento Mensal</button>
+          <button class="orc-tab-btn" data-tab="resumo">Resumo por Setor</button>
         </div>
 
         <!-- Aba 1: Definir Orçamento Mensal -->
@@ -755,7 +755,7 @@
           <!-- Barra de Opções e Instruções -->
           <div id="orc-barra-opcoes" style="display:none; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; padding:.6rem .85rem; background:var(--cinza-50); border:1px solid var(--cinza-200); border-radius:8px;">
             <p id="orc-instrucao" style="font-size:.8rem; color:var(--cinza-600); margin:0;">
-              💡 Edite os valores de cada mês e clique <strong>fora do campo</strong> para salvar automaticamente. Deixe <strong>0,00</strong> para meses sem orçamento definido.
+              Edite os valores de cada mês e clique <strong>fora do campo</strong> para salvar automaticamente. Deixe <strong>0,00</strong> para meses sem orçamento definido.
             </p>
             <label style="display:inline-flex; align-items:center; gap:.5rem; font-size:.84rem; font-weight:700; color:var(--cinza-800); cursor:pointer; user-select:none; background:var(--branco); padding:.4rem .85rem; border-radius:6px; border:1px solid var(--cinza-300); box-shadow:0 1px 2px rgba(0,0,0,0.05);">
               <input type="checkbox" id="chk-orc-aplicar-todos" style="width:16px; height:16px; accent-color:var(--primaria); cursor:pointer;" />
@@ -801,12 +801,12 @@
   <div class="modal-backdrop" id="modal-gerir-usuarios">
     <div class="modal-card modal-card-lg">
       <div class="modal-header">
-        <h3>👥 Gerenciamento de Usuários</h3>
+        <h3>Gerenciamento de Usuários</h3>
         <button class="btn-fechar" data-fechar="modal-gerir-usuarios">&times;</button>
       </div>
       <div class="modal-body">
         <div class="gestao-top-bar">
-          <input type="text" id="busca-usuario-modal" class="busca-input" placeholder="🔍 Filtrar usuários por login ou nome..." />
+          <input type="text" id="busca-usuario-modal" class="busca-input" placeholder="Filtrar usuários por login ou nome..." />
           <button type="button" class="btn btn-primario" id="btn-abrir-novo-usuario">
             + Novo Usuário
           </button>
@@ -899,7 +899,7 @@
         };
       } else if (pct >= 80) {
         return {
-          texto: "Perto de atingir o orçamento",
+          texto: "Perto do orçamento",
           classeBadge: "badge-perto",
           classeDot: "dot-perto",
           classeLinha: "linha-perto",
@@ -1512,7 +1512,7 @@
     document.getElementById("btn-limpar-todas-despesas").addEventListener("click", async () => {
       const result = await Swal.fire({
         title: 'LIMPAR TODAS AS DESPESAS?',
-        html: `<p style="color:#b91c1c; font-weight:bold; margin-bottom:8px;">⚠️ ATENÇÃO: AÇÃO IRREVERSÍVEL!</p>` +
+        html: `<p style="color:#b91c1c; font-weight:bold; margin-bottom:8px;">ATENÇÃO: AÇÃO IRREVERSÍVEL!</p>` +
               `<p>Você está prestes a <b>apagar definitivamente todas as despesas</b> cadastradas no sistema.</p>` +
               `<small style="color:#6b7280;">Os orçamentos, setores e fornecedores serão preservados.</small>`,
         icon: 'warning',
@@ -2555,7 +2555,7 @@
         const data = await res.json();
 
         if (data.erro) {
-          grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ ${data.erro}</div>`;
+          grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">${data.erro}</div>`;
           return;
         }
 
@@ -2563,7 +2563,7 @@
         estado.mesesOrcamentoAtual = data.meses || [];
         renderGradeOrcamentos(data.meses, parseInt(setorId), ano);
       } catch (e) {
-        grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ Erro ao conectar ao servidor.</div>`;
+        grade.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">Erro ao conectar ao servidor.</div>`;
       }
     }
 
@@ -2603,7 +2603,7 @@
           <div class="orc-mes-prog">
             <div class="orc-mes-prog-fill" id="orc-prog-mes-${m.mes}" style="width:${pct}%; background:${corBarra};"></div>
           </div>
-          <div class="orc-mes-salvo" id="orc-salvo-mes-${m.mes}">✓ Salvo</div>
+          <div class="orc-mes-salvo" id="orc-salvo-mes-${m.mes}">Salvo</div>
         `;
         grade.appendChild(card);
 
@@ -2777,13 +2777,13 @@
         const data = await res.json();
 
         if (data.erro) {
-          grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ ${data.erro}</div>`;
+          grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">${data.erro}</div>`;
           return;
         }
 
         renderResumoOrcamentos(data.setores, ano);
       } catch (e) {
-        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">⚠️ Erro ao conectar ao servidor.</div>`;
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--vermelho);">Erro ao conectar ao servidor.</div>`;
       }
     }
 
@@ -2828,7 +2828,7 @@
           </div>
           <button type="button" class="btn btn-outline" style="font-size:.78rem; padding:.3rem .7rem; margin-top:.25rem;"
             onclick="abrirOrcamentoSetor(${s.setor_id}, '${escapeHtml(s.setor_nome)}', ${ano})">
-            ✏️ Definir Orçamento
+            Definir Orçamento
           </button>
         `;
         grid.appendChild(card);
@@ -3059,7 +3059,7 @@
       const ehProprio = CURRENT_USER_ID !== null && id === CURRENT_USER_ID;
       const avisoProprio = ehProprio
         ? `<div style="padding:0.5rem; background:#eff6ff; border-radius:6px; font-size:0.75rem; color:#1e40af; margin-bottom:0.5rem;">
-             ℹ️ Você está editando sua própria conta logada. Por segurança, o perfil e o status não podem ser alterados nesta tela.
+             Você está editando sua própria conta logada. Por segurança, o perfil e o status não podem ser alterados nesta tela.
            </div>`
         : "";
 

@@ -332,7 +332,7 @@ def gerar_pdf(caminho: Path) -> None:
         [
             ["Há gasto e orçado ≤ 0", "Acima do orçamento"],
             ["Percentual ≥ 100%", "Acima do orçamento"],
-            ["Percentual ≥ 80% e &lt; 100%", "Perto de atingir o orçamento"],
+            ["Percentual ≥ 80% e &lt; 100%", "Perto do orçamento"],
             ["Demais casos", "Dentro do orçamento"],
         ],
         [8 * cm, 9 * cm],
@@ -647,7 +647,7 @@ def gerar_docx(caminho: Path) -> None:
         [
             ["Há gasto e orçado ≤ 0", "Acima do orçamento"],
             ["Percentual ≥ 100%", "Acima do orçamento"],
-            ["Percentual ≥ 80% e < 100%", "Perto de atingir o orçamento"],
+            ["Percentual ≥ 80% e < 100%", "Perto do orçamento"],
             ["Demais casos", "Dentro do orçamento"],
         ],
     )

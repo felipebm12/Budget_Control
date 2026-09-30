@@ -52,7 +52,7 @@ def calcular_status_orcamento(pct: float, orcado: float = 0, gasto: float = 0) -
     if pct_val >= 100:
         return "Acima do orçamento"
     if pct_val >= 80:
-        return "Perto de atingir o orçamento"
+        return "Perto do orçamento"
     return "Dentro do orçamento"
 
 
