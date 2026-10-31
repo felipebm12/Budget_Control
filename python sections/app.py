@@ -1,3 +1,4 @@
+import csv
 import io
 import logging
 import math
@@ -912,6 +913,118 @@ def api_orcamentos_setor_resumo():
         return jsonify({"erro": "Falha ao consultar resumo de orçamentos por setor."}), 500
 
 
+@app.route("/api/orcamentos-setor/resumo/exportar-pdf", methods=["GET"])
+@login_required
+def api_exportar_resumo_setor_pdf():
+    """Gera o PDF do resumo anual de orçamento por setor em memória (BytesIO) e faz o download."""
+    negado = _negar_se_sem_permissao("relatorios_exportar", "exportar o resumo por setor em PDF")
+    if negado:
+        return negado
+
+    ano = request.args.get("ano", type=int) or datetime.now().year
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    buffer_pdf = io.BytesIO()
+
+    try:
+        setores = database.buscar_resumo_orcamentos_setores(ano=ano)
+        total_orcado = sum(float(s.get("total_orcado", 0)) for s in setores)
+        total_gasto = sum(float(s.get("total_gasto", 0)) for s in setores)
+        saldo_geral = total_orcado - total_gasto
+        pct_geral = round((total_gasto / total_orcado * 100), 2) if total_orcado > 0 else 0
+        status_geral = (
+            "Sem orçamento"
+            if (total_orcado == 0 and total_gasto == 0)
+            else database.calcular_status_orcamento(pct_geral, total_orcado, total_gasto)
+        )
+
+        report.gerar_pdf_resumo_setores(
+            setores=setores,
+            ano=ano,
+            total_orcado_fmt=database._fmt_moeda(total_orcado),
+            total_gasto_fmt=database._fmt_moeda(total_gasto),
+            saldo_geral_fmt=database._fmt_moeda(saldo_geral),
+            percentual_geral_fmt=database._fmt_percentual(pct_geral),
+            status_geral=status_geral,
+            arquivo_destino=buffer_pdf,
+        )
+
+        buffer_pdf.seek(0)
+        nome_arquivo = f"Resumo_Orcamento_Setores_{ano}_{timestamp}.pdf"
+        return send_file(
+            buffer_pdf,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="application/pdf",
+        )
+    except Exception as e:
+        log.error(f"Erro ao exportar PDF de resumo por setor: {e}")
+        return jsonify({"erro": "Falha interna ao gerar o PDF de resumo por setor."}), 500
+
+
+@app.route("/api/orcamentos-setor/resumo/exportar-csv", methods=["GET"])
+@login_required
+def api_exportar_resumo_setor_csv():
+    """Gera o arquivo CSV do resumo anual de orçamento por setor em memória (UTF-8 com BOM, separador ';')."""
+    negado = _negar_se_sem_permissao("relatorios_exportar", "exportar o resumo por setor em CSV")
+    if negado:
+        return negado
+
+    ano = request.args.get("ano", type=int) or datetime.now().year
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    try:
+        setores = database.buscar_resumo_orcamentos_setores(ano=ano)
+        buffer_texto = io.StringIO()
+        writer = csv.writer(buffer_texto, delimiter=";", quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+        writer.writerow([
+            "Setor",
+            "Ano",
+            "Orçado Numérico (R$)",
+            "Orçado Formatado",
+            "Gasto Numérico (R$)",
+            "Gasto Formatado",
+            "Saldo Numérico (R$)",
+            "Saldo Formatado",
+            "% Utilizado",
+            "Status",
+        ])
+
+        for s in setores:
+            orcado = float(s.get("total_orcado", 0))
+            gasto = float(s.get("total_gasto", 0))
+            saldo = float(s.get("saldo", orcado - gasto))
+            sem_orcamento = (orcado == 0 and gasto == 0)
+            status_texto = "Sem orçamento" if sem_orcamento else str(s.get("status", "Dentro do orçamento"))
+
+            writer.writerow([
+                _sanitizar_celula_csv(s.get("setor_nome", "")),
+                ano,
+                f"{orcado:.2f}".replace(".", ","),
+                s.get("total_orcado_fmt", "R$ 0,00"),
+                f"{gasto:.2f}".replace(".", ","),
+                s.get("total_gasto_fmt", "R$ 0,00"),
+                f"{saldo:.2f}".replace(".", ","),
+                s.get("saldo_fmt", "R$ 0,00"),
+                s.get("percentual_fmt", "0,00%"),
+                status_texto,
+            ])
+
+        conteudo_bytes = buffer_texto.getvalue().encode("utf-8-sig")
+        buffer_csv = io.BytesIO(conteudo_bytes)
+        nome_arquivo = f"Resumo_Orcamento_Setores_{ano}_{timestamp}.csv"
+
+        return send_file(
+            buffer_csv,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="text/csv; charset=utf-8",
+        )
+    except Exception as e:
+        log.error(f"Erro ao exportar CSV de resumo por setor: {e}")
+        return jsonify({"erro": "Falha interna ao gerar o CSV de resumo por setor."}), 500
+
+
 # ── Dados Consolidados (Visão Resumida) ──────────────────────────────────────
 
 @app.route("/api/dados")
@@ -1034,6 +1147,85 @@ def api_exportar_pdf():
     except Exception as e:
         log.error(f"Erro ao exportar PDF: {e}")
         return jsonify({"erro": "Falha interna ao gerar o relatório em PDF."}), 500
+
+
+def _sanitizar_celula_csv(valor) -> str:
+    """Previne CSV Formula Injection (DDE) ao abrir em Excel/LibreOffice."""
+    texto = str(valor if valor is not None else "")
+    if texto and texto[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + texto
+    return texto
+
+
+@app.route("/api/exportar-csv")
+@login_required
+def api_exportar_csv():
+    """Gera o arquivo CSV das despesas filtradas em memória (UTF-8 com BOM, separador ';') e faz o download."""
+    negado = _negar_se_sem_permissao("relatorios_exportar", "exportar relatórios em CSV")
+    if negado:
+        return negado
+
+    ano_atual = datetime.now().year
+    data_inicio = request.args.get("data_inicio") or f"{ano_atual}-01-01"
+    data_fim = request.args.get("data_fim") or f"{ano_atual}-12-31"
+
+    setor_id = request.args.get("setor_id", type=int) or None
+    fornecedor_id = request.args.get("fornecedor_id", type=int) or None
+    categoria_id = request.args.get("categoria_id", type=int) or None
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    try:
+        despesas = database.buscar_despesas_periodo(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            setor_id=setor_id,
+            fornecedor_id=fornecedor_id,
+            categoria_id=categoria_id,
+        )
+
+        buffer_texto = io.StringIO()
+        writer = csv.writer(buffer_texto, delimiter=";", quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+
+        writer.writerow([
+            "ID",
+            "Data da Compra",
+            "Descrição",
+            "Setor",
+            "Fornecedor",
+            "Categoria",
+            "Destino",
+            "Valor Numérico (R$)",
+            "Valor Formatado",
+        ])
+
+        for d in despesas:
+            valor_num_br = f"{float(d.get('valor', 0)):.2f}".replace(".", ",")
+            writer.writerow([
+                d.get("id", ""),
+                _sanitizar_celula_csv(d.get("data", "")),
+                _sanitizar_celula_csv(d.get("descricao", "")),
+                _sanitizar_celula_csv(d.get("setor", "")),
+                _sanitizar_celula_csv(d.get("fornecedor", "")),
+                _sanitizar_celula_csv(d.get("categoria", "")),
+                _sanitizar_celula_csv(d.get("destino", "")),
+                valor_num_br,
+                _sanitizar_celula_csv(d.get("valor_fmt", "")),
+            ])
+
+        conteudo_bytes = buffer_texto.getvalue().encode("utf-8-sig")
+        buffer_csv = io.BytesIO(conteudo_bytes)
+        nome_arquivo = f"Despesas_Empresariais_{timestamp}.csv"
+
+        return send_file(
+            buffer_csv,
+            as_attachment=True,
+            download_name=nome_arquivo,
+            mimetype="text/csv; charset=utf-8",
+        )
+    except Exception as e:
+        log.error(f"Erro ao exportar CSV: {e}")
+        return jsonify({"erro": "Falha interna ao gerar o arquivo CSV."}), 500
 
 
 if __name__ == "__main__":

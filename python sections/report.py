@@ -275,6 +275,126 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
     return destino
 
 
+def gerar_pdf_resumo_setores(
+    setores: list,
+    ano: int,
+    total_orcado_fmt: str = "R$ 0,00",
+    total_gasto_fmt: str = "R$ 0,00",
+    saldo_geral_fmt: str = "R$ 0,00",
+    percentual_geral_fmt: str = "0,00%",
+    status_geral: str = "Dentro do orçamento",
+    arquivo_destino=None,
+):
+    """
+    Gera o PDF com o resumo anual de orçamento × gasto real por setor.
+    Aceita caminho em disco (str) ou buffer em memória (io.BytesIO).
+    """
+    destino = arquivo_destino or config.ARQUIVO_PDF
+    doc = SimpleDocTemplate(
+        destino,
+        pagesize=landscape(letter),
+        rightMargin=25, leftMargin=25,
+        topMargin=25,   bottomMargin=25,
+    )
+
+    s = _estilos()
+    agora = datetime.now().strftime("%d/%m/%Y às %H:%M")
+    story = []
+
+    story.append(Paragraph("Controle Orçamentário Empresarial — Resumo por Setor", s["titulo"]))
+    story.append(Paragraph(
+        f"<b>Ano de Referência:</b> {_esc(ano)} &nbsp;|&nbsp; "
+        f"<b>Total Orçado:</b> {_esc(total_orcado_fmt)} &nbsp;|&nbsp; "
+        f"<b>Total Gasto:</b> {_esc(total_gasto_fmt)} &nbsp;|&nbsp; "
+        f"<b>Saldo Geral:</b> {_esc(saldo_geral_fmt)}",
+        s["subtitulo"],
+    ))
+    story.append(Paragraph(
+        f"Gerado em: {agora} &nbsp;|&nbsp; Total de setores: <b>{len(setores)}</b>",
+        s["data_geracao"],
+    ))
+
+    if not setores:
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Nenhum setor encontrado para o ano selecionado.", s["celula"]))
+        doc.build(story)
+        return destino
+
+    cabecalhos = ["Setor / Departamento", "Orçado (R$)", "Gasto (R$)", "Saldo (R$)", "% Utilizado", "Status"]
+    table_data = [[
+        Paragraph(cabecalhos[0], s["cabecalho"]),
+        Paragraph(cabecalhos[1], s["cabecalho_centro"]),
+        Paragraph(cabecalhos[2], s["cabecalho_centro"]),
+        Paragraph(cabecalhos[3], s["cabecalho_centro"]),
+        Paragraph(cabecalhos[4], s["cabecalho_centro"]),
+        Paragraph(cabecalhos[5], s["cabecalho"]),
+    ]]
+
+    for item in setores:
+        sem_orcamento = (item.get("total_orcado", 0) == 0 and item.get("total_gasto", 0) == 0)
+        status_texto = "Sem orçamento" if sem_orcamento else str(item.get("status", "Dentro do orçamento"))
+        st_up = status_texto.upper()
+        if "ACIMA" in st_up or "ALERTA" in st_up:
+            estilo_status = s["celula_alerta"]
+        elif "PERTO" in st_up:
+            estilo_status = s["celula_perto"]
+        elif "SEM ORÇAMENTO" in st_up:
+            estilo_status = s["celula"]
+        else:
+            estilo_status = s["celula_ok"]
+
+        table_data.append([
+            Paragraph(_esc(item.get("setor_nome", "-")), s["celula_bold"]),
+            Paragraph(_esc(item.get("total_orcado_fmt", "R$ 0,00")), s["celula_centro"]),
+            Paragraph(_esc(item.get("total_gasto_fmt", "R$ 0,00")), s["celula_centro"]),
+            Paragraph(_esc(item.get("saldo_fmt", "R$ 0,00")), s["celula_centro"]),
+            Paragraph(_esc(item.get("percentual_fmt", "0,00%")), s["celula_centro"]),
+            Paragraph(_esc(status_texto), estilo_status),
+        ])
+
+    # Linha de total geral
+    table_data.append([
+        Paragraph("TOTAL GERAL", s["celula_bold"]),
+        Paragraph(_esc(total_orcado_fmt), s["celula_bold"]),
+        Paragraph(_esc(total_gasto_fmt), s["celula_bold"]),
+        Paragraph(_esc(saldo_geral_fmt), s["celula_bold"]),
+        Paragraph(_esc(percentual_geral_fmt), s["celula_bold"]),
+        Paragraph(_esc(status_geral), s["celula_bold"]),
+    ])
+
+    comandos = [
+        ("BACKGROUND",    (0, 0), (-1, 0),  COR_PRIMARIA),
+        ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+        ("GRID",          (0, 0), (-1, -1), 0.5, COR_GRADE),
+        ("BACKGROUND",    (0, -1), (-1, -1), COR_TOTAL_BG),
+        ("LINEABOVE",     (0, -1), (-1, -1), 1.2, COR_PRIMARIA_E),
+    ]
+
+    for i, item in enumerate(setores, start=1):
+        sem_orcamento = (item.get("total_orcado", 0) == 0 and item.get("total_gasto", 0) == 0)
+        status_texto = "Sem orçamento" if sem_orcamento else str(item.get("status", ""))
+        st_up = status_texto.upper()
+        if "ACIMA" in st_up or "ALERTA" in st_up:
+            comandos.append(("BACKGROUND", (0, i), (-1, i), COR_ALERTA))
+        elif "PERTO" in st_up:
+            comandos.append(("BACKGROUND", (0, i), (-1, i), COR_PERTO))
+        elif i % 2 == 0:
+            comandos.append(("BACKGROUND", (0, i), (-1, i), COR_ZEBRA))
+
+    tabela = Table(table_data, colWidths=[150, 110, 110, 110, 90, 150], repeatRows=1)
+    tabela.setStyle(TableStyle(comandos))
+
+    story.append(Spacer(1, 6))
+    story.append(tabela)
+    doc.build(story)
+    log.info("PDF Resumo por Setor gerado com sucesso.")
+    return destino
+
 
 def criar_pdf(dados: list) -> None:
     """Compatibilidade reversa com o main.py antigo."""

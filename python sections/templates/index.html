@@ -140,6 +140,22 @@
               </div>
             </button>
 
+            <!-- Exportar CSV -->
+            <button type="button" class="dropdown-item" id="btn-exportar-csv" title="Exportar despesas do período em planilha CSV">
+              <div class="dropdown-item-icone ic-verde">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Exportar CSV</span>
+                <span class="dropdown-item-desc">Baixar despesas do período em planilha</span>
+              </div>
+            </button>
+
             <!-- Trocar Senha -->
             <button type="button" class="dropdown-item" id="btn-abrir-modal-trocar-senha" title="Alterar minha senha de acesso">
               <div class="dropdown-item-icone ic-laranja">
@@ -775,13 +791,35 @@
 
         <!-- Aba 2: Resumo por Setor -->
         <div class="orc-tab-painel" id="orc-tab-resumo">
-          <div class="orc-setor-controles">
-            <div class="orc-campo-ano">
-              <label for="orc-resumo-ano">Ano de Referência</label>
-              <input type="number" id="orc-resumo-ano" class="form-control orc-ano-input" min="2020" max="2035" />
+          <div class="orc-setor-controles" style="justify-content:space-between; flex-wrap:wrap;">
+            <div style="display:flex; align-items:flex-end; gap:.75rem; flex-wrap:wrap;">
+              <div class="orc-campo-ano">
+                <label for="orc-resumo-ano">Ano de Referência</label>
+                <input type="number" id="orc-resumo-ano" class="form-control orc-ano-input" min="2020" max="2035" />
+              </div>
+              <div class="orc-campo-btn">
+                <button type="button" class="btn btn-primario btn-carregar-setor" id="btn-carregar-resumo-orcamentos">Ver Resumo</button>
+              </div>
             </div>
-            <div class="orc-campo-btn">
-              <button type="button" class="btn btn-primario btn-carregar-setor" id="btn-carregar-resumo-orcamentos">Ver Resumo</button>
+            <div class="orc-campo-btn" id="box-exportar-resumo-setor" style="gap:.5rem; flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline btn-carregar-setor" id="btn-exportar-resumo-setor-pdf" style="gap:.4rem; padding:0 .95rem;" title="Exportar resumo por setor em PDF">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--vermelho);">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="12" y1="18" x2="12" y2="12"/>
+                  <polyline points="9 15 12 18 15 15"/>
+                </svg>
+                <span>Exportar PDF</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-carregar-setor" id="btn-exportar-resumo-setor-csv" style="gap:.4rem; padding:0 .95rem;" title="Exportar resumo por setor em CSV">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--azul);">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+                <span>Exportar CSV</span>
+              </button>
             </div>
           </div>
           <div class="orc-resumo-grid" id="orc-resumo-grid">
@@ -852,7 +890,7 @@
       { chave: "fornecedores_gerenciar", titulo: "Gerenciar Fornecedores", desc: "Criar, editar e excluir fornecedores", grupo: "Cadastros", padrao: false },
       { chave: "categorias_gerenciar", titulo: "Gerenciar Categorias", desc: "Criar, editar e excluir categorias/rubricas", grupo: "Cadastros", padrao: false },
       { chave: "orcamentos_editar", titulo: "Definir Orçamentos por Setor", desc: "Criar e alterar limites mensais de orçamento", grupo: "Orçamentos & Relatórios", padrao: false },
-      { chave: "relatorios_exportar", titulo: "Exportar Relatórios PDF", desc: "Baixar relatórios resumidos e detalhados em PDF", grupo: "Orçamentos & Relatórios", padrao: true },
+      { chave: "relatorios_exportar", titulo: "Exportar Relatórios (PDF / CSV)", desc: "Baixar relatórios em PDF e planilhas CSV", grupo: "Orçamentos & Relatórios", padrao: true },
     ];
 
     function temPermissao(chave) {
@@ -876,8 +914,13 @@
       const btnNovaCat = document.getElementById("btn-abrir-nova-categoria-inline");
       if (btnNovaCat) btnNovaCat.style.display = temPermissao("categorias_gerenciar") ? "" : "none";
 
+      const podeExportar = temPermissao("relatorios_exportar");
       const btnExportarPdf = document.getElementById("btn-exportar-pdf");
-      if (btnExportarPdf) btnExportarPdf.style.display = temPermissao("relatorios_exportar") ? "" : "none";
+      const btnExportarCsv = document.getElementById("btn-exportar-csv");
+      const boxExportarResumoSetor = document.getElementById("box-exportar-resumo-setor");
+      if (btnExportarPdf) btnExportarPdf.style.display = podeExportar ? "" : "none";
+      if (btnExportarCsv) btnExportarCsv.style.display = podeExportar ? "" : "none";
+      if (boxExportarResumoSetor) boxExportarResumoSetor.style.display = podeExportar ? "flex" : "none";
     }
 
     // ── Estado Global ──────────────────────────────────────────────────────
@@ -1382,14 +1425,22 @@
     function renderCardsDetalhe(d) {
       const qtd = d.quantidade || 0;
       const total = d.total_gasto || 0;
-      const maior = qtd > 0 ? Math.max(...d.despesas.map((x) => x.valor)) : 0;
 
-      // Identificar a Categoria Mais Custosa considerando as despesas filtradas
+      // Identificar o Maior Lançamento (valor + descrição) e a Categoria Mais Custosa
+      let maiorDespesa = null;
       const gastosPorCategoria = {};
       (d.despesas || []).forEach((item) => {
+        const valorNum = Number(item.valor || 0);
+        if (!maiorDespesa || valorNum > Number(maiorDespesa.valor || 0)) {
+          maiorDespesa = item;
+        }
         const cat = item.categoria || "Sem Categoria";
-        gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + Number(item.valor || 0);
+        gastosPorCategoria[cat] = (gastosPorCategoria[cat] || 0) + valorNum;
       });
+      const maior = maiorDespesa ? Number(maiorDespesa.valor || 0) : 0;
+      const maiorDescricao = maiorDespesa && maiorDespesa.descricao
+        ? maiorDespesa.descricao
+        : "Maior despesa no filtro";
 
       let catMaisCustosa = "Nenhuma";
       let maiorCustoCat = 0;
@@ -1432,7 +1483,11 @@
       document.getElementById("card4-prog-box").style.display = "none";
       const card4Sub = document.getElementById("card4-sub");
       card4Sub.style.display = "block";
-      card4Sub.textContent = "Maior despesa no filtro";
+      card4Sub.style.overflow = "hidden";
+      card4Sub.style.textOverflow = "ellipsis";
+      card4Sub.style.whiteSpace = "nowrap";
+      card4Sub.textContent = maiorDescricao;
+      card4Sub.title = maiorDescricao;
     }
 
     function renderCardsDetalheVazio() {
@@ -1465,6 +1520,7 @@
       const card4Sub = document.getElementById("card4-sub");
       card4Sub.style.display = "block";
       card4Sub.textContent = "Sem despesas no período";
+      card4Sub.removeAttribute("title");
     }
 
     function renderTabelaDetalhada(despesas) {
@@ -2391,10 +2447,16 @@
       });
     });
 
-    // ── Exportação de PDF ──────────────────────────────────────────────────
+    // ── Exportação de PDF e CSV ────────────────────────────────────────────
     document.getElementById("btn-exportar-pdf").addEventListener("click", () => {
       const url = `/api/exportar-pdf?${montarQueryParams()}&visao=${estado.visao}`;
       avisarSucesso("Gerando arquivo PDF do período selecionado...");
+      window.location.href = url;
+    });
+
+    document.getElementById("btn-exportar-csv")?.addEventListener("click", () => {
+      const url = `/api/exportar-csv?${montarQueryParams()}`;
+      avisarSucesso("Gerando planilha CSV das despesas do período...");
       window.location.href = url;
     });
 
@@ -2655,6 +2717,28 @@
       }
     }
 
+    function fmtValorMoedaInput(val) {
+      const num = Number(val || 0);
+      if (!Number.isFinite(num) || num < 0) return "0,00";
+      return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function parseValorMoedaInput(str) {
+      const digitos = String(str ?? "").replace(/\D/g, "").slice(0, 11);
+      if (!digitos) return 0;
+      return parseInt(digitos, 10) / 100;
+    }
+
+    function replicarOrcamentoSeMarcado(inputOrigem) {
+      const chk = document.getElementById("chk-orc-aplicar-todos");
+      if (chk && chk.checked) {
+        const valFormatado = inputOrigem.value;
+        document.querySelectorAll(".orc-mes-valor-input").forEach((outro) => {
+          if (outro !== inputOrigem) outro.value = valFormatado;
+        });
+      }
+    }
+
     function renderGradeOrcamentos(meses, setorId, ano) {
       const grade = document.getElementById("orc-grade-meses");
       grade.innerHTML = "";
@@ -2663,7 +2747,7 @@
       const chkTodosEl = document.getElementById("chk-orc-aplicar-todos");
       if (instrucaoEl) {
         instrucaoEl.innerHTML = podeEditarOrc
-          ? `Edite os valores de cada mês e clique <strong>fora do campo</strong> para salvar automaticamente. Deixe <strong>0,00</strong> para meses sem orçamento definido.`
+          ? `Digite o valor desejado (a pontuação de milhar e centavos é automática) e clique <strong>fora do campo</strong> para salvar.`
           : `Modo <strong>somente leitura</strong>: você pode consultar os valores orçados e realizados de cada mês.`;
       }
       if (chkTodosEl && chkTodosEl.parentElement) {
@@ -2683,12 +2767,12 @@
           <div class="orc-mes-input-row">
             <span>R$</span>
             <input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
               class="orc-mes-valor-input"
               id="orc-input-mes-${m.mes}"
-              value="${m.valor_orcado.toFixed(2)}"
-              min="0"
-              step="0.01"
+              value="${fmtValorMoedaInput(m.valor_orcado)}"
               placeholder="0,00"
               data-mes="${m.mes}"
               data-setor-id="${setorId}"
@@ -2711,30 +2795,84 @@
 
         const input = card.querySelector(`#orc-input-mes-${m.mes}`);
 
-        // Replicar em tempo real enquanto digita se o checkbox estiver ativo
-        input.addEventListener("input", () => {
-          const chk = document.getElementById("chk-orc-aplicar-todos");
-          if (chk && chk.checked) {
-            const val = input.value;
-            document.querySelectorAll(".orc-mes-valor-input").forEach((outro) => {
-              if (outro !== input) outro.value = val;
-            });
+        // Ao focar ou clicar no campo, marca para que o primeiro dígito sobreponha o valor atual
+        input.addEventListener("focus", () => {
+          input.dataset.sobreporAoDigitar = "1";
+          setTimeout(() => input.select(), 0);
+        });
+
+        input.addEventListener("mouseup", (e) => {
+          if (input.dataset.sobreporAoDigitar === "1") {
+            e.preventDefault();
+            input.select();
           }
+        });
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur();
+            return;
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            input.dataset.sobreporAoDigitar = "0";
+            input.value = fmtValorMoedaInput(m.valor_orcado);
+            input.blur();
+            return;
+          }
+
+          if (input.dataset.sobreporAoDigitar === "1") {
+            if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+              e.preventDefault();
+              const novoValor = parseInt(e.key, 10) / 100;
+              input.value = fmtValorMoedaInput(novoValor);
+              input.dataset.sobreporAoDigitar = "0";
+              const len = input.value.length;
+              input.setSelectionRange(len, len);
+              replicarOrcamentoSeMarcado(input);
+              return;
+            }
+            if (e.key === "Backspace" || e.key === "Delete") {
+              e.preventDefault();
+              input.value = "0,00";
+              input.dataset.sobreporAoDigitar = "0";
+              const len = input.value.length;
+              input.setSelectionRange(len, len);
+              replicarOrcamentoSeMarcado(input);
+              return;
+            }
+          }
+        });
+
+        // Máscara automática de moeda (centavos e separador de milhar) e replicação em tempo real
+        input.addEventListener("input", (e) => {
+          if (input.dataset.sobreporAoDigitar === "1") {
+            input.dataset.sobreporAoDigitar = "0";
+            if (e.inputType === "insertText" && e.data && /\d/.test(e.data)) {
+              const dig = e.data.replace(/\D/g, "").slice(0, 11);
+              input.value = fmtValorMoedaInput(dig ? parseInt(dig, 10) / 100 : 0);
+            } else {
+              input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+            }
+          } else {
+            input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+          }
+          const len = input.value.length;
+          input.setSelectionRange(len, len);
+          replicarOrcamentoSeMarcado(input);
         });
 
         // Salvar automaticamente ao sair do campo (blur)
         input.addEventListener("blur", async () => {
+          input.dataset.sobreporAoDigitar = "0";
+          input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
           const chk = document.getElementById("chk-orc-aplicar-todos");
           if (chk && chk.checked) {
             await salvarOrcamentoTodosMeses(input, estado.mesesOrcamentoAtual || meses);
           } else {
             await salvarOrcamentoMes(input, m);
           }
-        });
-
-        // Salvar com Enter
-        input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") input.blur();
         });
       });
     }
@@ -2743,7 +2881,8 @@
       const mes = parseInt(input.dataset.mes, 10);
       const setorId = parseInt(input.dataset.setorId, 10);
       const ano = parseInt(input.dataset.ano, 10);
-      const valor = parseFloat(input.value || 0);
+      const valor = parseValorMoedaInput(input.value);
+      input.value = fmtValorMoedaInput(valor);
 
       try {
         const res = await fetch("/api/orcamentos-setor", {
@@ -2791,7 +2930,7 @@
     async function salvarOrcamentoTodosMeses(input, meses) {
       const setorId = parseInt(input.dataset.setorId, 10);
       const ano = parseInt(input.dataset.ano, 10);
-      const valor = parseFloat(input.value || 0);
+      const valor = parseValorMoedaInput(input.value);
 
       try {
         const res = await fetch("/api/orcamentos-setor", {
@@ -2811,7 +2950,7 @@
             const corBarra = isAlerta ? "var(--vermelho)" : (pctCap > 50 ? "var(--ambar)" : "var(--verde-hover)");
 
             const inp = document.getElementById(`orc-input-mes-${m.mes}`);
-            if (inp) inp.value = valor.toFixed(2);
+            if (inp) inp.value = fmtValorMoedaInput(valor);
 
             const pctSpan = document.getElementById(`orc-pct-mes-${m.mes}`);
             if (pctSpan) pctSpan.textContent = fmtPct(pct);
@@ -2850,11 +2989,12 @@
             const inputs = Array.from(document.querySelectorAll(".orc-mes-valor-input"));
             if (inputs.length > 0) {
               // Localiza o primeiro input que tiver valor preenchido > 0, ou o primeiro input
-              const inputComValor = inputs.find((inp) => parseFloat(inp.value) > 0) || inputs[0];
-              const val = inputComValor ? parseFloat(inputComValor.value || 0) : 0;
+              const inputComValor = inputs.find((inp) => parseValorMoedaInput(inp.value) > 0) || inputs[0];
+              const val = inputComValor ? parseValorMoedaInput(inputComValor.value) : 0;
               if (val > 0) {
+                const valFmt = fmtValorMoedaInput(val);
                 inputs.forEach((inp) => {
-                  inp.value = val.toFixed(2);
+                  inp.value = valFmt;
                 });
                 salvarOrcamentoTodosMeses(inputComValor, estado.mesesOrcamentoAtual || []);
               }
@@ -2958,6 +3098,24 @@
     // Event listeners do modal de orçamento
     document.getElementById("btn-carregar-orcamentos").addEventListener("click", carregarOrcamentosMensal);
     document.getElementById("btn-carregar-resumo-orcamentos").addEventListener("click", carregarResumoOrcamentos);
+
+    document.getElementById("btn-exportar-resumo-setor-pdf")?.addEventListener("click", () => {
+      const ano = parseInt(document.getElementById("orc-resumo-ano").value, 10) || new Date().getFullYear();
+      if (ano < 2020 || ano > 2035) {
+        avisarErro("Informe um ano válido (2020–2035).");
+        return;
+      }
+      window.location.href = `/api/orcamentos-setor/resumo/exportar-pdf?ano=${ano}`;
+    });
+
+    document.getElementById("btn-exportar-resumo-setor-csv")?.addEventListener("click", () => {
+      const ano = parseInt(document.getElementById("orc-resumo-ano").value, 10) || new Date().getFullYear();
+      if (ano < 2020 || ano > 2035) {
+        avisarErro("Informe um ano válido (2020–2035).");
+        return;
+      }
+      window.location.href = `/api/orcamentos-setor/resumo/exportar-csv?ano=${ano}`;
+    });
 
     // Carregamento automático ao selecionar setor ou trocar ano no modal
     document.getElementById("orc-sel-setor").addEventListener("change", () => {
