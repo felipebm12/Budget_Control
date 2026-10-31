@@ -154,20 +154,6 @@
               </div>
             </button>
 
-            <!-- Limpar Despesas -->
-            <button type="button" class="dropdown-item item-perigo" id="btn-limpar-todas-despesas" title="Limpar todas as despesas cadastradas">
-              <div class="dropdown-item-icone" style="background:var(--vermelho-bg); color:var(--vermelho);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </div>
-              <div class="dropdown-item-texto">
-                <span class="dropdown-item-titulo" style="color:var(--vermelho);">Limpar Despesas</span>
-                <span class="dropdown-item-desc">Excluir lançamentos do sistema</span>
-              </div>
-            </button>
-
             {% if current_user.is_authenticated and current_user.tipo == 'admin' %}
             <div class="dropdown-divisor"></div>
             <div class="dropdown-secao-rotulo">Administração</div>
@@ -187,6 +173,20 @@
                 <span class="dropdown-item-desc">Cadastrar e gerenciar acessos</span>
               </div>
             </button>
+
+            <!-- Limpar Despesas (Exclusivo Admin) -->
+            <button type="button" class="dropdown-item item-perigo" id="btn-limpar-todas-despesas" title="Limpar todas as despesas cadastradas">
+              <div class="dropdown-item-icone" style="background:var(--vermelho-bg); color:var(--vermelho);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo" style="color:var(--vermelho);">Limpar Despesas</span>
+                <span class="dropdown-item-desc">Excluir lançamentos do sistema</span>
+              </div>
+            </button>
             {% endif %}
           </div>
         </div>
@@ -198,14 +198,16 @@
           <span class="usuario-header-tag">{{ current_user.tipo }}</span>
         </div>
 
-        <a href="{{ url_for('logout') }}" class="btn-header-logout" title="Encerrar sessão no sistema">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-          <span>Sair</span>
-        </a>
+        <form method="POST" action="{{ url_for('logout') }}" style="display:inline; margin:0;">
+          <button type="submit" class="btn-header-logout" title="Encerrar sessão no sistema">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            <span>Sair</span>
+          </button>
+        </form>
         {% endif %}
       </div>
     </div>
@@ -799,9 +801,9 @@
   {% if current_user.is_authenticated and current_user.tipo == 'admin' %}
   <!-- ── Modal: Gerenciar Usuários ───────────────────────────────────────── -->
   <div class="modal-backdrop" id="modal-gerir-usuarios">
-    <div class="modal-card modal-card-lg">
+    <div class="modal-card modal-card-lg" style="max-width: 980px;">
       <div class="modal-header">
-        <h3>Gerenciamento de Usuários</h3>
+        <h3>Gerenciamento de Usuários e Permissões</h3>
         <button class="btn-fechar" data-fechar="modal-gerir-usuarios">&times;</button>
       </div>
       <div class="modal-body">
@@ -819,6 +821,7 @@
                 <th>Login</th>
                 <th>Nome Completo</th>
                 <th style="text-align:center;">Perfil</th>
+                <th style="text-align:center;">Permissões</th>
                 <th style="text-align:center;">Status</th>
                 <th>Último Acesso</th>
                 <th style="text-align:center;">Ações</th>
@@ -839,6 +842,43 @@
   <script>
     const CURRENT_USER_ID = {{ current_user.id if current_user.is_authenticated else 'null' }};
     const CURRENT_USER_TIPO = "{{ current_user.tipo if current_user.is_authenticated else '' }}";
+    const CURRENT_USER_PERMISSOES = {{ (current_user.permissoes if current_user.is_authenticated else {}) | tojson }};
+
+    const CATALOGO_PERMISSOES = [
+      { chave: "despesas_criar", titulo: "Cadastrar Despesas", desc: "Registrar novos lançamentos financeiros", grupo: "Despesas", padrao: true },
+      { chave: "despesas_editar", titulo: "Editar Despesas", desc: "Alterar lançamentos existentes", grupo: "Despesas", padrao: true },
+      { chave: "despesas_excluir", titulo: "Excluir Despesas", desc: "Remover lançamentos individuais", grupo: "Despesas", padrao: true },
+      { chave: "setores_gerenciar", titulo: "Gerenciar Setores", desc: "Criar, editar e excluir setores/departamentos", grupo: "Cadastros", padrao: false },
+      { chave: "fornecedores_gerenciar", titulo: "Gerenciar Fornecedores", desc: "Criar, editar e excluir fornecedores", grupo: "Cadastros", padrao: false },
+      { chave: "categorias_gerenciar", titulo: "Gerenciar Categorias", desc: "Criar, editar e excluir categorias/rubricas", grupo: "Cadastros", padrao: false },
+      { chave: "orcamentos_editar", titulo: "Definir Orçamentos por Setor", desc: "Criar e alterar limites mensais de orçamento", grupo: "Orçamentos & Relatórios", padrao: false },
+      { chave: "relatorios_exportar", titulo: "Exportar Relatórios PDF", desc: "Baixar relatórios resumidos e detalhados em PDF", grupo: "Orçamentos & Relatórios", padrao: true },
+    ];
+
+    function temPermissao(chave) {
+      if (CURRENT_USER_TIPO === "admin") return true;
+      return Boolean(CURRENT_USER_PERMISSOES && CURRENT_USER_PERMISSOES[chave]);
+    }
+
+    function aplicarPermissoesInterface() {
+      const podeCriarDespesa = temPermissao("despesas_criar");
+      const btnMenuDespesa = document.getElementById("btn-abrir-modal-despesa");
+      const btnAtalhoDespesa = document.getElementById("btn-atalho-nova-despesa");
+      if (btnMenuDespesa) btnMenuDespesa.style.display = podeCriarDespesa ? "" : "none";
+      if (btnAtalhoDespesa) btnAtalhoDespesa.style.display = podeCriarDespesa ? "" : "none";
+
+      const btnNovoSetor = document.getElementById("btn-abrir-novo-setor-inline");
+      if (btnNovoSetor) btnNovoSetor.style.display = temPermissao("setores_gerenciar") ? "" : "none";
+
+      const btnNovoForn = document.getElementById("btn-abrir-novo-fornecedor-inline");
+      if (btnNovoForn) btnNovoForn.style.display = temPermissao("fornecedores_gerenciar") ? "" : "none";
+
+      const btnNovaCat = document.getElementById("btn-abrir-nova-categoria-inline");
+      if (btnNovaCat) btnNovaCat.style.display = temPermissao("categorias_gerenciar") ? "" : "none";
+
+      const btnExportarPdf = document.getElementById("btn-exportar-pdf");
+      if (btnExportarPdf) btnExportarPdf.style.display = temPermissao("relatorios_exportar") ? "" : "none";
+    }
 
     // ── Estado Global ──────────────────────────────────────────────────────
     const estado = {
@@ -1080,21 +1120,15 @@
       carregarDadosView();
     }
 
-    // ── Carregar Setores, Fornecedores e Categorias ────────────────────────
+    // ── Carregar Setores, Fornecedores e Categorias (1 única requisição) ──
     async function carregarListasAuxiliares() {
       try {
-        const [resSet, resForn, resCat] = await Promise.all([
-          fetch("/api/setores"),
-          fetch("/api/fornecedores"),
-          fetch("/api/categorias"),
-        ]);
-        const dataSet = await resSet.json();
-        const dataForn = await resForn.json();
-        const dataCat = await resCat.json();
+        const res = await fetch("/api/listas-auxiliares");
+        const data = await res.json();
 
-        estado.setores = dataSet.setores || [];
-        estado.fornecedores = dataForn.fornecedores || [];
-        estado.categorias = dataCat.categorias || [];
+        estado.setores = data.setores || [];
+        estado.fornecedores = data.fornecedores || [];
+        estado.categorias = data.categorias || [];
 
         // Popular selects da barra superior
         popularSelect("filtro-setor", estado.setores, "id", "nome", "Todos os Setores", true);
@@ -1244,6 +1278,7 @@
     function renderTabelaResumo(meses) {
       const tbody = document.getElementById("tbody-resumo");
       tbody.innerHTML = "";
+      const frag = document.createDocumentFragment();
 
       meses.forEach((m) => {
         const st = obterStatusOrcamento(m.percentual, m.orcado, m.gasto);
@@ -1281,8 +1316,9 @@
         btnDetalharMes.setAttribute("aria-label", `Ver despesas detalhadas de ${m.mes}`);
         btnDetalharMes.addEventListener("click", () => abrirDetalhamentoMes(m.ano, m.mes_num));
         tr.querySelector(".td-mes-periodo").appendChild(btnDetalharMes);
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
 
       document.getElementById("estado-loading").style.display = "none";
       document.getElementById("estado-erro").style.display = "none";
@@ -1440,30 +1476,46 @@
         return;
       }
 
+      const podeEditarDesp = temPermissao("despesas_editar");
+      const podeExcluirDesp = temPermissao("despesas_excluir");
+      const frag = document.createDocumentFragment();
       despesas.forEach((d) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td class="td-num">${d.data}</td>
-          <td class="td-destaque">${d.descricao}</td>
-          <td><span class="badge-tag badge-setor">${d.setor}</span></td>
-          <td><span class="badge-tag badge-fornecedor">${d.fornecedor}</span></td>
-          <td><span class="badge-tag badge-categoria">${d.categoria}</span></td>
-          <td style="color: var(--cinza-600);">${d.destino || "—"}</td>
-          <td class="td-num td-destaque" style="color: var(--cinza-800)">${d.valor_fmt}</td>
-          <td style="text-align:center; white-space: nowrap;">
-            <button type="button" class="btn-icone btn-icone-edit" title="Editar lançamento" onclick="abrirModalEditarDespesa(${d.id})">
+        const botoesAcao = [];
+        if (podeEditarDesp) {
+          botoesAcao.push(`
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar lançamento" onclick="abrirModalEditarDespesa(${Number(d.id)})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button type="button" class="btn-icone btn-icone-del" title="Excluir despesa" onclick="confirmarExcluirDespesa(${d.id}, '${escapeHtml(d.descricao)}', '${d.valor_fmt}')">
+          `);
+        }
+        if (podeExcluirDesp) {
+          botoesAcao.push(`
+            <button type="button" class="btn-icone btn-icone-del" title="Excluir despesa" onclick="confirmarExcluirDespesa(${Number(d.id)}, '${escapeJsAttr(d.descricao)}', '${escapeJsAttr(d.valor_fmt)}')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
             </button>
-          </td>
+          `);
+        }
+        const conteudoAcoes = botoesAcao.length > 0
+          ? botoesAcao.join("")
+          : `<span style="color:var(--cinza-400); font-size:0.75rem;" title="Você não possui permissão de edição/exclusão">Somente leitura</span>`;
+
+        tr.innerHTML = `
+          <td class="td-num">${escapeHtml(d.data)}</td>
+          <td class="td-destaque">${escapeHtml(d.descricao)}</td>
+          <td><span class="badge-tag badge-setor">${escapeHtml(d.setor)}</span></td>
+          <td><span class="badge-tag badge-fornecedor">${escapeHtml(d.fornecedor)}</span></td>
+          <td><span class="badge-tag badge-categoria">${escapeHtml(d.categoria)}</span></td>
+          <td style="color: var(--cinza-600);">${escapeHtml(d.destino || "—")}</td>
+          <td class="td-num td-destaque" style="color: var(--cinza-800)">${escapeHtml(d.valor_fmt)}</td>
+          <td style="text-align:center; white-space: nowrap;">${conteudoAcoes}</td>
         `;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
 
       document.getElementById("estado-loading").style.display = "none";
       document.getElementById("estado-erro").style.display = "none";
@@ -1473,14 +1525,31 @@
     }
 
     function escapeHtml(text) {
-      return (text || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+      return String(text ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function escapeJsAttr(text) {
+      return String(text ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
     // ── Excluir Despesa Individual com SweetAlert2 ─────────────────────────
     async function confirmarExcluirDespesa(id, descricao, valorFmt) {
       const result = await Swal.fire({
         title: 'Excluir despesa?',
-        html: `Deseja realmente excluir o lançamento <b>"${descricao}"</b> no valor de <b>${valorFmt}</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        html: `Deseja realmente excluir o lançamento <b>"${escapeHtml(descricao)}"</b> no valor de <b>${escapeHtml(valorFmt)}</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc2626',
@@ -1509,7 +1578,7 @@
     }
 
     // ── Limpar TODAS as Despesas com SweetAlert2 ────────────────────────────
-    document.getElementById("btn-limpar-todas-despesas").addEventListener("click", async () => {
+    document.getElementById("btn-limpar-todas-despesas")?.addEventListener("click", async () => {
       const result = await Swal.fire({
         title: 'LIMPAR TODAS AS DESPESAS?',
         html: `<p style="color:#b91c1c; font-weight:bold; margin-bottom:8px;">ATENÇÃO: AÇÃO IRREVERSÍVEL!</p>` +
@@ -1562,26 +1631,31 @@
         return;
       }
 
+      const podeGerirSetores = temPermissao("setores_gerenciar");
+      const frag = document.createDocumentFragment();
       setores.forEach((s) => {
         const tr = document.createElement("tr");
+        const acoesHtml = podeGerirSetores
+          ? `<button type="button" class="btn-icone btn-icone-edit" title="Editar setor" onclick="editarSetor(${Number(s.id)}, '${escapeJsAttr(s.nome)}', '${escapeJsAttr(s.descricao)}')">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+             </button>
+             <button type="button" class="btn-icone btn-icone-del" title="Excluir setor" onclick="confirmarExcluirSetor(${Number(s.id)}, '${escapeJsAttr(s.nome)}', ${Number(s.total_despesas || 0)})">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+             </button>`
+          : `<span style="color:var(--cinza-400); font-size:0.75rem;">Somente leitura</span>`;
+
         tr.innerHTML = `
-          <td class="td-destaque">${s.nome}</td>
-          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${s.descricao || "—"}</td>
+          <td class="td-destaque">${escapeHtml(s.nome)}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.descricao || "—")}</td>
           <td style="text-align:center;">
-            <span class="badge ${s.total_despesas > 0 ? 'badge-setor' : 'badge-ok'}">${s.total_despesas}</span>
+            <span class="badge ${s.total_despesas > 0 ? 'badge-setor' : 'badge-ok'}">${Number(s.total_despesas || 0)}</span>
           </td>
-          <td class="td-num">${s.total_gasto_fmt}</td>
-          <td style="text-align:center; white-space: nowrap;">
-            <button type="button" class="btn-icone btn-icone-edit" title="Editar setor" onclick="editarSetor(${s.id}, '${escapeHtml(s.nome)}', '${escapeHtml(s.descricao)}')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            </button>
-            <button type="button" class="btn-icone btn-icone-del" title="Excluir setor" onclick="confirmarExcluirSetor(${s.id}, '${escapeHtml(s.nome)}', ${s.total_despesas})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </td>
+          <td class="td-num">${escapeHtml(s.total_gasto_fmt)}</td>
+          <td style="text-align:center; white-space: nowrap;">${acoesHtml}</td>
         `;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
     }
 
     document.getElementById("busca-setor-modal").addEventListener("input", (e) => {
@@ -1645,9 +1719,9 @@
         html:
           `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Setor *</label>` +
-          `<input id="swal-edit-setor-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-setor-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição</label>` +
-          `<input id="swal-edit-setor-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-setor-desc" class="swal2-input" value="${escapeHtml(descAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `</div>`,
         focusConfirm: false,
         showCancelButton: true,
@@ -1692,7 +1766,7 @@
         Swal.fire({
           icon: 'error',
           title: 'Exclusão Bloqueada',
-          html: `O setor <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
+          html: `O setor <b>"${escapeHtml(nome)}"</b> possui <b>${Number(qtdDespesas)}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
           confirmButtonColor: '#DB7E04'
         });
         return;
@@ -1700,7 +1774,7 @@
 
       const result = await Swal.fire({
         title: 'Excluir Setor?',
-        html: `Deseja realmente remover o setor <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        html: `Deseja realmente remover o setor <b>"${escapeHtml(nome)}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc2626',
@@ -1744,26 +1818,31 @@
         return;
       }
 
+      const podeGerirFornecedores = temPermissao("fornecedores_gerenciar");
+      const frag = document.createDocumentFragment();
       fornecedores.forEach((f) => {
         const tr = document.createElement("tr");
+        const acoesHtml = podeGerirFornecedores
+          ? `<button type="button" class="btn-icone btn-icone-edit" title="Editar fornecedor" onclick="editarFornecedor(${Number(f.id)}, '${escapeJsAttr(f.nome)}', '${escapeJsAttr(f.descricao)}')">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+             </button>
+             <button type="button" class="btn-icone btn-icone-del" title="Excluir fornecedor" onclick="confirmarExcluirFornecedor(${Number(f.id)}, '${escapeJsAttr(f.nome)}', ${Number(f.total_despesas || 0)})">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+             </button>`
+          : `<span style="color:var(--cinza-400); font-size:0.75rem;">Somente leitura</span>`;
+
         tr.innerHTML = `
-          <td class="td-destaque">${f.nome}</td>
-          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${f.descricao || "—"}</td>
+          <td class="td-destaque">${escapeHtml(f.nome)}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(f.descricao || "—")}</td>
           <td style="text-align:center;">
-            <span class="badge ${f.total_despesas > 0 ? 'badge-fornecedor' : 'badge-ok'}">${f.total_despesas}</span>
+            <span class="badge ${f.total_despesas > 0 ? 'badge-fornecedor' : 'badge-ok'}">${Number(f.total_despesas || 0)}</span>
           </td>
-          <td class="td-num">${f.total_gasto_fmt}</td>
-          <td style="text-align:center; white-space: nowrap;">
-            <button type="button" class="btn-icone btn-icone-edit" title="Editar fornecedor" onclick="editarFornecedor(${f.id}, '${escapeHtml(f.nome)}', '${escapeHtml(f.descricao)}')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            </button>
-            <button type="button" class="btn-icone btn-icone-del" title="Excluir fornecedor" onclick="confirmarExcluirFornecedor(${f.id}, '${escapeHtml(f.nome)}', ${f.total_despesas})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </td>
+          <td class="td-num">${escapeHtml(f.total_gasto_fmt)}</td>
+          <td style="text-align:center; white-space: nowrap;">${acoesHtml}</td>
         `;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
     }
 
     document.getElementById("busca-fornecedor-modal").addEventListener("input", (e) => {
@@ -1827,9 +1906,9 @@
         html:
           `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome do Fornecedor *</label>` +
-          `<input id="swal-edit-forn-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-forn-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição / Contato</label>` +
-          `<input id="swal-edit-forn-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-forn-desc" class="swal2-input" value="${escapeHtml(descAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `</div>`,
         focusConfirm: false,
         showCancelButton: true,
@@ -1874,7 +1953,7 @@
         Swal.fire({
           icon: 'error',
           title: 'Exclusão Bloqueada',
-          html: `O fornecedor <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
+          html: `O fornecedor <b>"${escapeHtml(nome)}"</b> possui <b>${Number(qtdDespesas)}</b> despesa(s) vinculada(s).<br><br>Para excluí-lo, remova ou reatribua essas despesas primeiro.`,
           confirmButtonColor: '#DB7E04'
         });
         return;
@@ -1882,7 +1961,7 @@
 
       const result = await Swal.fire({
         title: 'Excluir Fornecedor?',
-        html: `Deseja realmente remover o fornecedor <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        html: `Deseja realmente remover o fornecedor <b>"${escapeHtml(nome)}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc2626',
@@ -1926,26 +2005,31 @@
         return;
       }
 
+      const podeGerirCategorias = temPermissao("categorias_gerenciar");
+      const frag = document.createDocumentFragment();
       categorias.forEach((c) => {
         const tr = document.createElement("tr");
+        const acoesHtml = podeGerirCategorias
+          ? `<button type="button" class="btn-icone btn-icone-edit" title="Editar categoria" onclick="editarCategoria(${Number(c.id)}, '${escapeJsAttr(c.nome)}', '${escapeJsAttr(c.descricao)}')">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+             </button>
+             <button type="button" class="btn-icone btn-icone-del" title="Excluir categoria" onclick="confirmarExcluirCategoria(${Number(c.id)}, '${escapeJsAttr(c.nome)}', ${Number(c.total_despesas || 0)})">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+             </button>`
+          : `<span style="color:var(--cinza-400); font-size:0.75rem;">Somente leitura</span>`;
+
         tr.innerHTML = `
-          <td class="td-destaque">${c.nome}</td>
-          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${c.descricao || "—"}</td>
+          <td class="td-destaque">${escapeHtml(c.nome)}</td>
+          <td style="color: var(--cinza-600); max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(c.descricao || "—")}</td>
           <td style="text-align:center;">
-            <span class="badge ${c.total_despesas > 0 ? 'badge-categoria' : 'badge-ok'}">${c.total_despesas || 0}</span>
+            <span class="badge ${c.total_despesas > 0 ? 'badge-categoria' : 'badge-ok'}">${Number(c.total_despesas || 0)}</span>
           </td>
-          <td class="td-num">${c.total_gasto_fmt || fmtMoeda(c.total_gasto || 0)}</td>
-          <td style="text-align:center; white-space: nowrap;">
-            <button type="button" class="btn-icone btn-icone-edit" title="Editar categoria" onclick="editarCategoria(${c.id}, '${escapeHtml(c.nome)}', '${escapeHtml(c.descricao)}')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            </button>
-            <button type="button" class="btn-icone btn-icone-del" title="Excluir categoria" onclick="confirmarExcluirCategoria(${c.id}, '${escapeHtml(c.nome)}', ${c.total_despesas || 0})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </td>
+          <td class="td-num">${escapeHtml(c.total_gasto_fmt || fmtMoeda(c.total_gasto || 0))}</td>
+          <td style="text-align:center; white-space: nowrap;">${acoesHtml}</td>
         `;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
     }
 
     document.getElementById("busca-categoria-modal").addEventListener("input", (e) => {
@@ -2009,9 +2093,9 @@
         html:
           `<div style="text-align:left; display:flex; flex-direction:column; gap:8px;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151;">Nome da Categoria *</label>` +
-          `<input id="swal-edit-cat-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-cat-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `<label style="font-size:0.8rem; font-weight:bold; color:#374151; margin-top:8px;">Descrição</label>` +
-          `<input id="swal-edit-cat-desc" class="swal2-input" value="${descAtual}" style="margin:0; width:100%; box-sizing:border-box;">` +
+          `<input id="swal-edit-cat-desc" class="swal2-input" value="${escapeHtml(descAtual)}" style="margin:0; width:100%; box-sizing:border-box;">` +
           `</div>`,
         focusConfirm: false,
         showCancelButton: true,
@@ -2056,7 +2140,7 @@
         Swal.fire({
           icon: 'error',
           title: 'Exclusão Bloqueada',
-          html: `A categoria <b>"${nome}"</b> possui <b>${qtdDespesas}</b> despesa(s) vinculada(s).<br><br>Para excluí-la, remova ou reatribua essas despesas primeiro.`,
+          html: `A categoria <b>"${escapeHtml(nome)}"</b> possui <b>${Number(qtdDespesas)}</b> despesa(s) vinculada(s).<br><br>Para excluí-la, remova ou reatribua essas despesas primeiro.`,
           confirmButtonColor: '#7c3aed'
         });
         return;
@@ -2064,7 +2148,7 @@
 
       const result = await Swal.fire({
         title: 'Excluir Categoria?',
-        html: `Deseja realmente remover a categoria <b>"${nome}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
+        html: `Deseja realmente remover a categoria <b>"${escapeHtml(nome)}"</b>?<br><small style="color:#6b7280;">Esta ação não pode ser desfeita.</small>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc2626',
@@ -2253,9 +2337,13 @@
       carregarDadosView();
     });
 
-    // Busca instantânea na tabela detalhada (mantém ordenação ativa)
+    // Busca instantânea na tabela detalhada (com debounce de 150ms, mantém ordenação ativa)
+    let _timerBuscaTabela = null;
     document.getElementById("filtro-busca-tabela").addEventListener("input", () => {
-      reaplicarOrdenacaoTabela();
+      clearTimeout(_timerBuscaTabela);
+      _timerBuscaTabela = setTimeout(() => {
+        reaplicarOrdenacaoTabela();
+      }, 150);
     });
 
     // ── Controles de Ordenação ─────────────────────────────────────────────
@@ -2570,6 +2658,17 @@
     function renderGradeOrcamentos(meses, setorId, ano) {
       const grade = document.getElementById("orc-grade-meses");
       grade.innerHTML = "";
+      const podeEditarOrc = temPermissao("orcamentos_editar");
+      const instrucaoEl = document.getElementById("orc-instrucao");
+      const chkTodosEl = document.getElementById("chk-orc-aplicar-todos");
+      if (instrucaoEl) {
+        instrucaoEl.innerHTML = podeEditarOrc
+          ? `Edite os valores de cada mês e clique <strong>fora do campo</strong> para salvar automaticamente. Deixe <strong>0,00</strong> para meses sem orçamento definido.`
+          : `Modo <strong>somente leitura</strong>: você pode consultar os valores orçados e realizados de cada mês.`;
+      }
+      if (chkTodosEl && chkTodosEl.parentElement) {
+        chkTodosEl.parentElement.style.display = podeEditarOrc ? "inline-flex" : "none";
+      }
 
       meses.forEach((m) => {
         const st = obterStatusOrcamento(m.percentual, m.valor_orcado, m.gasto_real);
@@ -2594,6 +2693,7 @@
               data-mes="${m.mes}"
               data-setor-id="${setorId}"
               data-ano="${ano}"
+              ${podeEditarOrc ? "" : "disabled title='Somente leitura'"}
             />
           </div>
           <div class="orc-mes-gasto">
@@ -2606,6 +2706,8 @@
           <div class="orc-mes-salvo" id="orc-salvo-mes-${m.mes}">Salvo</div>
         `;
         grade.appendChild(card);
+
+        if (!podeEditarOrc) return;
 
         const input = card.querySelector(`#orc-input-mes-${m.mes}`);
 
@@ -2796,6 +2898,7 @@
         return;
       }
 
+      const frag = document.createDocumentFragment();
       setores.forEach((s) => {
         const st = obterStatusOrcamento(s.percentual, s.total_orcado, s.total_gasto);
         const pct = Math.min(s.percentual, 100);
@@ -2806,7 +2909,7 @@
         card.className = "orc-resumo-card";
         card.innerHTML = `
           <div class="orc-resumo-card-header">
-            <span class="orc-resumo-card-nome">${s.setor_nome}</span>
+            <span class="orc-resumo-card-nome">${escapeHtml(s.setor_nome)}</span>
             ${semOrcamento
               ? `<span class="badge" style="background:var(--cinza-100); color:var(--cinza-600); font-size:.72rem; padding:.2rem .55rem; border-radius:99px;">Sem orçamento</span>`
               : `<span class="badge ${st.classeBadge}" style="font-size:.72rem;">
@@ -2816,23 +2919,24 @@
             }
           </div>
           <div class="orc-resumo-valores">
-            <span>Orçado: <strong>${s.total_orcado_fmt}</strong></span>
-            <span>Gasto: <strong>${s.total_gasto_fmt}</strong></span>
+            <span>Orçado: <strong>${escapeHtml(s.total_orcado_fmt)}</strong></span>
+            <span>Gasto: <strong>${escapeHtml(s.total_gasto_fmt)}</strong></span>
           </div>
           <div class="orc-mes-prog">
             <div class="orc-mes-prog-fill" style="width:${pct}%; background:${corBarra};"></div>
           </div>
           <div style="display:flex; justify-content:space-between; font-size:.75rem; color:var(--cinza-600);">
-            <span>Saldo: <strong style="color:${s.saldo < 0 ? 'var(--vermelho)' : 'var(--verde-hover)'}">${s.saldo_fmt}</strong></span>
-            <span>${s.percentual_fmt} utilizado</span>
+            <span>Saldo: <strong style="color:${s.saldo < 0 ? 'var(--vermelho)' : 'var(--verde-hover)'}">${escapeHtml(s.saldo_fmt)}</strong></span>
+            <span>${escapeHtml(s.percentual_fmt)} utilizado</span>
           </div>
           <button type="button" class="btn btn-outline" style="font-size:.78rem; padding:.3rem .7rem; margin-top:.25rem;"
-            onclick="abrirOrcamentoSetor(${s.setor_id}, '${escapeHtml(s.setor_nome)}', ${ano})">
-            Definir Orçamento
+            onclick="abrirOrcamentoSetor(${Number(s.setor_id)}, '${escapeJsAttr(s.setor_nome)}', ${Number(ano)})">
+            ${temPermissao("orcamentos_editar") ? "Definir Orçamento" : "Ver Orçamento Mensal"}
           </button>
         `;
-        grid.appendChild(card);
+        frag.appendChild(card);
       });
+      grid.appendChild(frag);
     }
 
     // Atalho: clicar em "Definir Orçamento" no card do resumo abre a aba mensal com o setor pré-selecionado
@@ -2872,7 +2976,96 @@
       abrirModalOrcamentoSetor();
     });
 
-    // ── Gestão de Usuários (Administrador) ──────────────────────────────────
+    // ── Gestão de Usuários e Permissões (Administrador) ─────────────────────
+    function montarHtmlPainelPermissoes(prefixoId, permissoesAtuais = null, oculto = false) {
+      const perms = {};
+      CATALOGO_PERMISSOES.forEach((p) => {
+        perms[p.chave] = permissoesAtuais && typeof permissoesAtuais[p.chave] === "boolean"
+          ? permissoesAtuais[p.chave]
+          : p.padrao;
+      });
+
+      const grupos = {};
+      CATALOGO_PERMISSOES.forEach((p) => {
+        if (!grupos[p.grupo]) grupos[p.grupo] = [];
+        grupos[p.grupo].push(p);
+      });
+
+      let gruposHtml = "";
+      for (const [nomeGrupo, itens] of Object.entries(grupos)) {
+        gruposHtml += `
+          <div style="margin-top:0.55rem;">
+            <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--cinza-600); margin-bottom:0.35rem;">
+              ${escapeHtml(nomeGrupo)}
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">
+              ${itens.map((item) => `
+                <label style="display:flex; align-items:flex-start; gap:0.45rem; padding:0.42rem 0.55rem; background:#ffffff; border:1px solid var(--cinza-200); border-radius:6px; cursor:pointer; user-select:none; font-size:0.78rem;">
+                  <input type="checkbox" id="${prefixoId}-perm-${item.chave}" data-perm-chave="${item.chave}" ${perms[item.chave] ? "checked" : ""} style="margin-top:0.15rem; accent-color:var(--primaria); cursor:pointer;" />
+                  <span style="line-height:1.25;">
+                    <strong style="display:block; color:var(--cinza-800); font-size:0.78rem;">${escapeHtml(item.titulo)}</strong>
+                    <small style="color:var(--cinza-600); font-size:0.7rem;">${escapeHtml(item.desc)}</small>
+                  </span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div id="${prefixoId}-box-permissoes" style="display:${oculto ? "none" : "block"}; background:var(--cinza-50); border:1px solid var(--cinza-200); border-radius:8px; padding:0.7rem; margin-top:0.25rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
+            <span style="font-size:0.8rem; font-weight:700; color:var(--cinza-800);">Permissões do Usuário</span>
+            <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+              <button type="button" onclick="aplicarPresetPermissoes('${prefixoId}', 'completo')" style="font-size:0.68rem; padding:0.18rem 0.48rem; border-radius:4px; border:1px solid var(--cinza-300); background:#fff; cursor:pointer; font-weight:600; color:var(--cinza-800);">Liberar Tudo</button>
+              <button type="button" onclick="aplicarPresetPermissoes('${prefixoId}', 'operador')" style="font-size:0.68rem; padding:0.18rem 0.48rem; border-radius:4px; border:1px solid var(--cinza-300); background:#fff; cursor:pointer; font-weight:600; color:var(--cinza-800);">Operador (Padrão)</button>
+              <button type="button" onclick="aplicarPresetPermissoes('${prefixoId}', 'leitura')" style="font-size:0.68rem; padding:0.18rem 0.48rem; border-radius:4px; border:1px solid var(--cinza-300); background:#fff; cursor:pointer; font-weight:600; color:var(--cinza-800);">Somente Leitura</button>
+            </div>
+          </div>
+          ${gruposHtml}
+        </div>
+        <div id="${prefixoId}-aviso-admin" style="display:${oculto ? "block" : "none"}; padding:0.55rem 0.7rem; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; font-size:0.76rem; color:#92400e;">
+          Administradores possuem <strong>acesso total irrestrito</strong> a todos os módulos, cadastros, relatórios e gestão de usuários.
+        </div>
+      `;
+    }
+
+    function aplicarPresetPermissoes(prefixoId, preset) {
+      CATALOGO_PERMISSOES.forEach((p) => {
+        const chk = document.getElementById(`${prefixoId}-perm-${p.chave}`);
+        if (!chk) return;
+        if (preset === "completo") {
+          chk.checked = true;
+        } else if (preset === "leitura") {
+          chk.checked = false;
+        } else {
+          chk.checked = p.padrao;
+        }
+      });
+    }
+
+    function coletarPermissoesDoPainel(prefixoId) {
+      const resultado = {};
+      CATALOGO_PERMISSOES.forEach((p) => {
+        const chk = document.getElementById(`${prefixoId}-perm-${p.chave}`);
+        resultado[p.chave] = Boolean(chk && chk.checked);
+      });
+      return resultado;
+    }
+
+    function vincularTogglePerfilPermissoes(selectId, prefixoId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      sel.addEventListener("change", () => {
+        const ehAdmin = sel.value === "admin";
+        const boxPerms = document.getElementById(`${prefixoId}-box-permissoes`);
+        const avisoAdmin = document.getElementById(`${prefixoId}-aviso-admin`);
+        if (boxPerms) boxPerms.style.display = ehAdmin ? "none" : "block";
+        if (avisoAdmin) avisoAdmin.style.display = ehAdmin ? "block" : "none";
+      });
+    }
+
     async function abrirModalGerirUsuarios() {
       await carregarUsuarios();
       abrirModal("modal-gerir-usuarios");
@@ -2898,10 +3091,12 @@
       tbody.innerHTML = "";
 
       if (!usuarios || usuarios.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum usuário encontrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum usuário encontrado.</td></tr>`;
         return;
       }
 
+      const totalPerms = CATALOGO_PERMISSOES.length;
+      const frag = document.createDocumentFragment();
       usuarios.forEach((u) => {
         const tr = document.createElement("tr");
         const ehAdmin = u.tipo === "admin";
@@ -2909,17 +3104,39 @@
           ? `<span class="badge badge-admin">Administrador</span>`
           : `<span class="badge badge-usuario">Usuário</span>`;
 
+        const permsObj = u.permissoes || {};
+        const ativas = CATALOGO_PERMISSOES.filter((p) => ehAdmin || permsObj[p.chave]).map((p) => p.titulo);
+        const qtdAtivas = ativas.length;
+        const resumoTooltip = ativas.length > 0 ? `Liberado: ${ativas.join(", ")}` : "Nenhuma permissão de edição/ação liberada (Somente leitura)";
+
+        const badgePermissoes = ehAdmin
+          ? `<span class="badge badge-ok" title="Administradores possuem todas as permissões">Acesso Total</span>`
+          : `<button type="button" onclick="gerenciarPermissoesUsuario(${Number(u.id)})"
+               title="${escapeHtml(resumoTooltip)} — Clique para configurar"
+               style="border:1px solid var(--cinza-300); background:${qtdAtivas === 0 ? '#f3f4f6' : '#eff6ff'}; color:${qtdAtivas === 0 ? '#4b5563' : '#1d4ed8'}; border-radius:999px; padding:0.2rem 0.65rem; font-size:0.75rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.3rem;">
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+               ${qtdAtivas === 0 ? "Somente Leitura" : `${qtdAtivas}/${totalPerms} liberadas`}
+             </button>`;
+
         const badgeStatus = u.ativo
           ? `<span class="badge badge-ativo"><span class="dot dot-ok"></span> Ativo</span>`
           : `<span class="badge badge-inativo"><span class="dot" style="background:#9ca3af;"></span> Inativo</span>`;
 
         const ehProprioUsuario = CURRENT_USER_ID !== null && u.id === CURRENT_USER_ID;
 
+        const btnPermissoes = ehAdmin
+          ? `<button type="button" class="btn-icone" style="opacity:0.35; cursor:not-allowed;" title="Administradores já possuem todas as permissões">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+             </button>`
+          : `<button type="button" class="btn-icone btn-icone-edit" style="color:#2563eb;" title="Configurar permissões deste usuário" onclick="gerenciarPermissoesUsuario(${Number(u.id)})">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+             </button>`;
+
         const btnExcluir = ehProprioUsuario
           ? `<button type="button" class="btn-icone" style="opacity:0.35; cursor:not-allowed;" title="Você não pode excluir sua própria conta conectada">
                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
              </button>`
-          : `<button type="button" class="btn-icone btn-icone-del" title="Excluir usuário" onclick="confirmarExcluirUsuario(${u.id}, '${escapeHtml(u.username)}')">
+          : `<button type="button" class="btn-icone btn-icone-del" title="Excluir usuário" onclick="confirmarExcluirUsuario(${Number(u.id)}, '${escapeJsAttr(u.username)}')">
                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
              </button>`;
 
@@ -2927,20 +3144,74 @@
           <td class="td-destaque" style="font-family:monospace; font-size:0.86rem;">${escapeHtml(u.username)}</td>
           <td>${escapeHtml(u.nome_completo || "-")}</td>
           <td style="text-align:center;">${badgePerfil}</td>
+          <td style="text-align:center;">${badgePermissoes}</td>
           <td style="text-align:center;">${badgeStatus}</td>
-          <td style="color:var(--cinza-600); font-size:0.82rem;">${u.ultimo_acesso}</td>
+          <td style="color:var(--cinza-600); font-size:0.82rem;">${escapeHtml(u.ultimo_acesso)}</td>
           <td style="text-align:center; white-space:nowrap;">
-            <button type="button" class="btn-icone btn-icone-edit" title="Editar dados do usuário" onclick="editarUsuario(${u.id}, '${escapeHtml(u.nome_completo)}', '${u.tipo}', ${u.ativo})">
+            ${btnPermissoes}
+            <button type="button" class="btn-icone btn-icone-edit" title="Editar dados e permissões do usuário" onclick="editarUsuario(${Number(u.id)}, '${escapeJsAttr(u.nome_completo)}', '${escapeJsAttr(u.tipo)}', ${Boolean(u.ativo)})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button type="button" class="btn-icone btn-icone-key" title="Redefinir senha deste usuário" onclick="redefinirSenhaUsuario(${u.id}, '${escapeHtml(u.username)}')">
+            <button type="button" class="btn-icone btn-icone-key" title="Redefinir senha deste usuário" onclick="redefinirSenhaUsuario(${Number(u.id)}, '${escapeJsAttr(u.username)}')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-1.5 1.5L14 9l-1.5-1.5L10 10l1.5 1.5L9 14l-1.5-1.5L5 15l2 2-3 3 1 1 3-3 2 2 1-1-1.5-1.5L10 14l1.5 1.5L14 13l-1.5-1.5L15 9l2 2 4-4-2-2z"/></svg>
             </button>
             ${btnExcluir}
           </td>
         `;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
+    }
+
+    async function gerenciarPermissoesUsuario(id) {
+      const u = (estado.usuarios || []).find((x) => x.id === id);
+      if (!u) return;
+      if (u.tipo === "admin") {
+        Swal.fire({
+          icon: "info",
+          title: "Administrador",
+          text: "Usuários com perfil Administrador possuem acesso total irrestrito a todas as funções do sistema."
+        });
+        return;
+      }
+
+      const { value: novasPermissoes } = await Swal.fire({
+        title: `Permissões: ${u.nome_completo || u.username}`,
+        width: 650,
+        html: `
+          <div style="text-align:left;">
+            <p style="font-size:0.8rem; color:var(--cinza-600); margin:0 0 0.5rem 0;">
+              Escolha exatamente o que o usuário <strong>@${escapeHtml(u.username)}</strong> poderá fazer ou editar no sistema:
+            </p>
+            ${montarHtmlPainelPermissoes("swal-only-perm", u.permissoes, false)}
+          </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: "Salvar Permissões",
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "var(--primaria)",
+        preConfirm: () => coletarPermissoesDoPainel("swal-only-perm"),
+      });
+
+      if (!novasPermissoes) return;
+
+      try {
+        const res = await fetch(`/api/usuarios/${id}/permissoes`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ permissoes: novasPermissoes }),
+        });
+        const data = await res.json();
+        if (res.ok && data.sucesso) {
+          avisarSucesso(data.mensagem || "Permissões atualizadas com sucesso!");
+          await carregarUsuarios();
+        } else {
+          Swal.fire({ icon: "error", title: "Erro", text: data.erro || "Falha ao salvar permissões." });
+        }
+      } catch (err) {
+        Swal.fire({ icon: "error", title: "Erro", text: err.message });
+      }
     }
 
     // Busca rápida de usuários
@@ -2966,34 +3237,42 @@
       btnNovoUsuario.addEventListener("click", async () => {
         const { value: formValues } = await Swal.fire({
           title: "Cadastrar Novo Usuário",
+          width: 650,
           html: `
-            <div style="text-align:left; display:flex; flex-direction:column; gap:0.75rem;">
-              <div>
-                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Login (Username) *</label>
-                <input id="swal-novo-user-login" class="swal2-input" placeholder="Ex: joao.silva" style="margin:0; width:100%; box-sizing:border-box;">
-                <small style="color:var(--cinza-600); font-size:0.75rem;">Apenas letras, números, ponto, hífen ou sublinhado.</small>
-              </div>
-              <div>
-                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
-                <input id="swal-novo-user-nome" class="swal2-input" placeholder="Ex: João da Silva" style="margin:0; width:100%; box-sizing:border-box;">
+            <div style="text-align:left; display:flex; flex-direction:column; gap:0.65rem;">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Login (Username) *</label>
+                  <input id="swal-novo-user-login" class="swal2-input" placeholder="Ex: joao.silva" style="margin:0; width:100%; box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
+                  <input id="swal-novo-user-nome" class="swal2-input" placeholder="Ex: João da Silva" style="margin:0; width:100%; box-sizing:border-box;">
+                </div>
               </div>
               <div>
                 <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Perfil de Acesso *</label>
                 <select id="swal-novo-user-tipo" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
-                  <option value="usuario">Usuário Padrão</option>
-                  <option value="admin">Administrador</option>
+                  <option value="usuario">Usuário Padrão (Permissões Personalizáveis)</option>
+                  <option value="admin">Administrador (Acesso Total)</option>
                 </select>
               </div>
-              <div>
-                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Senha Inicial (mínimo 8 caracteres) *</label>
-                <input id="swal-novo-user-senha" type="password" class="swal2-input" placeholder="Digite uma senha forte" style="margin:0; width:100%; box-sizing:border-box;">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Senha Inicial (mín. 8) *</label>
+                  <input id="swal-novo-user-senha" type="password" class="swal2-input" placeholder="Digite uma senha forte" style="margin:0; width:100%; box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Confirmar Senha *</label>
+                  <input id="swal-novo-user-confirmar" type="password" class="swal2-input" placeholder="Confirme a senha" style="margin:0; width:100%; box-sizing:border-box;">
+                </div>
               </div>
-              <div>
-                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Confirmar Senha *</label>
-                <input id="swal-novo-user-confirmar" type="password" class="swal2-input" placeholder="Confirme a senha" style="margin:0; width:100%; box-sizing:border-box;">
-              </div>
+              ${montarHtmlPainelPermissoes("swal-novo-user", null, false)}
             </div>
           `,
+          didOpen: () => {
+            vincularTogglePerfilPermissoes("swal-novo-user-tipo", "swal-novo-user");
+          },
           focusConfirm: false,
           showCancelButton: true,
           confirmButtonText: "Cadastrar Usuário",
@@ -3005,6 +3284,7 @@
             const tipo = document.getElementById("swal-novo-user-tipo")?.value || "usuario";
             const senha = document.getElementById("swal-novo-user-senha")?.value || "";
             const confirmar = document.getElementById("swal-novo-user-confirmar")?.value || "";
+            const permissoes = coletarPermissoesDoPainel("swal-novo-user");
 
             if (!username) {
               Swal.showValidationMessage("O login (username) é obrigatório.");
@@ -3030,7 +3310,7 @@
               Swal.showValidationMessage("A senha e a confirmação não conferem.");
               return false;
             }
-            return { username, nome_completo: nomeCompleto, tipo, senha };
+            return { username, nome_completo: nomeCompleto, tipo, senha, permissoes };
           }
         });
 
@@ -3057,6 +3337,8 @@
 
     async function editarUsuario(id, nomeAtual, tipoAtual, ativoAtual) {
       const ehProprio = CURRENT_USER_ID !== null && id === CURRENT_USER_ID;
+      const uObj = (estado.usuarios || []).find((x) => x.id === id);
+      const permsAtuais = uObj ? uObj.permissoes : null;
       const avisoProprio = ehProprio
         ? `<div style="padding:0.5rem; background:#eff6ff; border-radius:6px; font-size:0.75rem; color:#1e40af; margin-bottom:0.5rem;">
              Você está editando sua própria conta logada. Por segurança, o perfil e o status não podem ser alterados nesta tela.
@@ -3065,29 +3347,36 @@
 
       const { value: formValues } = await Swal.fire({
         title: "Editar Usuário",
+        width: 650,
         html: `
-          <div style="text-align:left; display:flex; flex-direction:column; gap:0.75rem;">
+          <div style="text-align:left; display:flex; flex-direction:column; gap:0.65rem;">
             ${avisoProprio}
             <div>
               <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
-              <input id="swal-edit-user-nome" class="swal2-input" value="${nomeAtual}" style="margin:0; width:100%; box-sizing:border-box;">
+              <input id="swal-edit-user-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">
             </div>
-            <div>
-              <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Perfil de Acesso</label>
-              <select id="swal-edit-user-tipo" class="swal2-input" ${ehProprio ? "disabled" : ""} style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
-                <option value="usuario" ${tipoAtual === "usuario" ? "selected" : ""}>Usuário Padrão</option>
-                <option value="admin" ${tipoAtual === "admin" ? "selected" : ""}>Administrador</option>
-              </select>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Perfil de Acesso</label>
+                <select id="swal-edit-user-tipo" class="swal2-input" ${ehProprio ? "disabled" : ""} style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
+                  <option value="usuario" ${tipoAtual === "usuario" ? "selected" : ""}>Usuário Padrão</option>
+                  <option value="admin" ${tipoAtual === "admin" ? "selected" : ""}>Administrador</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Status da Conta</label>
+                <select id="swal-edit-user-status" class="swal2-input" ${ehProprio ? "disabled" : ""} style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
+                  <option value="true" ${ativoAtual ? "selected" : ""}>Ativo (Acesso Liberado)</option>
+                  <option value="false" ${!ativoAtual ? "selected" : ""}>Inativo (Acesso Bloqueado)</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Status da Conta</label>
-              <select id="swal-edit-user-status" class="swal2-input" ${ehProprio ? "disabled" : ""} style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
-                <option value="true" ${ativoAtual ? "selected" : ""}>Ativo (Acesso Liberado)</option>
-                <option value="false" ${!ativoAtual ? "selected" : ""}>Inativo (Acesso Bloqueado)</option>
-              </select>
-            </div>
+            ${montarHtmlPainelPermissoes("swal-edit-user", permsAtuais, tipoAtual === "admin")}
           </div>
         `,
+        didOpen: () => {
+          vincularTogglePerfilPermissoes("swal-edit-user-tipo", "swal-edit-user");
+        },
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: "Salvar Alterações",
@@ -3097,12 +3386,13 @@
           const nomeCompleto = (document.getElementById("swal-edit-user-nome")?.value || "").trim();
           const tipo = ehProprio ? tipoAtual : document.getElementById("swal-edit-user-tipo")?.value || "usuario";
           const ativo = ehProprio ? true : document.getElementById("swal-edit-user-status")?.value === "true";
+          const permissoes = coletarPermissoesDoPainel("swal-edit-user");
 
           if (!nomeCompleto) {
             Swal.showValidationMessage("O nome completo é obrigatório.");
             return false;
           }
-          return { nome_completo: nomeCompleto, tipo, ativo };
+          return { nome_completo: nomeCompleto, tipo, ativo, permissoes };
         }
       });
 
@@ -3339,6 +3629,7 @@
     }
 
     // ── Iniciar App ────────────────────────────────────────────────────────
+    aplicarPermissoesInterface();
     inicializar();
   </script>
 </body>

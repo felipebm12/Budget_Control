@@ -1,9 +1,12 @@
+import hashlib
 import os
 import sys
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Carrega as variáveis do arquivo .env
+# Carrega as variáveis do arquivo .env (CWD ou diretório de config.py)
 load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # ── Validação de variáveis obrigatórias ──────────────────────────────────────
 
@@ -23,6 +26,16 @@ DB_PORT     = os.getenv("DB_PORT", "5432")   # Padrão PostgreSQL
 DB_NAME     = _obrigatorio("DB_NAME")       # Ex: postgres
 DB_USER     = _obrigatorio("DB_USER")       # Ex: postgres.xxxxx
 DB_PASSWORD = _obrigatorio("DB_PASSWORD")
+
+# ── Configurações de Segurança e Servidor Flask ──────────────────────────────
+
+SECRET_KEY = os.getenv("SECRET_KEY") or hashlib.sha256(
+    f"budgetcontrol-v1:{DB_HOST}:{DB_USER}:{DB_PASSWORD}".encode("utf-8")
+).hexdigest()
+
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes")
+FLASK_PORT  = int(os.getenv("FLASK_PORT", "5000"))
+
 
 # ── Configurações de Filtro do Relatório ─────────────────────────────────────
 # Estes valores podem ser sobrescritos via argumentos de linha de comando (CLI).

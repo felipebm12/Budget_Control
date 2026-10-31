@@ -20,9 +20,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     tipo            varchar(20)  NOT NULL DEFAULT 'usuario'
                     CHECK (tipo IN ('admin', 'usuario')),
     ativo           boolean      NOT NULL DEFAULT true,
+    permissoes      jsonb        NOT NULL DEFAULT '{}'::jsonb,
     criado_em       timestamptz  NOT NULL DEFAULT now(),
     ultimo_acesso   timestamptz
 );
+
+-- Garante a coluna de permissões caso a tabela já tenha sido criada anteriormente
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- Índice para busca rápida por username (usado no login)
 CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios (username);

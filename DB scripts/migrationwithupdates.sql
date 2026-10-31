@@ -58,6 +58,9 @@ CREATE INDEX IF NOT EXISTS idx_despesas_rubrica_id
 CREATE INDEX IF NOT EXISTS idx_despesas_setor_id
   ON despesas (setor_id);
 
+CREATE INDEX IF NOT EXISTS idx_despesas_fornecedor_id
+  ON despesas (fornecedor_id);
+
 -- Índices compostos para as consultas mais comuns
 CREATE INDEX IF NOT EXISTS idx_despesas_rubrica_data
   ON despesas (rubrica_id, data_compra);

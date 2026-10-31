@@ -59,6 +59,7 @@ ALTER TABLE orcamentos_anuais
 DROP INDEX IF EXISTS idx_despesas_data_compra;
 DROP INDEX IF EXISTS idx_despesas_rubrica_id;
 DROP INDEX IF EXISTS idx_despesas_setor_id;
+DROP INDEX IF EXISTS idx_despesas_fornecedor_id;
 DROP INDEX IF EXISTS idx_despesas_rubrica_data;
 DROP INDEX IF EXISTS idx_despesas_setor_data;
 DROP INDEX IF EXISTS idx_despesas_data_compra_mes;

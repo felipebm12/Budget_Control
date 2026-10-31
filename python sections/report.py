@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -22,13 +23,24 @@ COR_PERTO       = colors.HexColor("#FEF3C7")  # Amarelo claro (fundo de perto do
 COR_OK          = colors.HexColor("#DCFCE7")  # Verde claro (fundo de OK)
 COR_TOTAL_BG    = colors.HexColor("#FEF3E2")  # Fundo para linha de totais
 
+_ESTILOS_CACHE: dict | None = None
+
+
+def _esc(valor) -> str:
+    """Escapa caracteres especiais XML (<, >, &) para evitar falhas ou injeção no ReportLab Paragraph."""
+    return xml_escape(str(valor if valor is not None else ""))
+
 
 def _estilos() -> dict:
-    """Cria e retorna todos os ParagraphStyles usados no PDF."""
+    """Cria (ou retorna do cache) todos os ParagraphStyles usados no PDF."""
+    global _ESTILOS_CACHE
+    if _ESTILOS_CACHE is not None:
+        return _ESTILOS_CACHE
+
     garantir_fontes()
     base = getSampleStyleSheet()
 
-    return {
+    _ESTILOS_CACHE = {
         "titulo": ParagraphStyle(
             "Titulo", parent=base["Heading1"],
             fontSize=15, textColor=COR_TEXTO,
@@ -82,35 +94,35 @@ def _estilos() -> dict:
             textColor=colors.white, fontName=FONT_BOLD, alignment=1,
         ),
     }
+    return _ESTILOS_CACHE
 
 
-def gerar_pdf_resumo(dados: list, periodo_texto: str = "Geral", arquivo_destino: str = None) -> str:
+def gerar_pdf_resumo(dados: list, periodo_texto: str = "Geral", arquivo_destino=None):
     """
     Gera o PDF com a visão resumida mensal de orçamentos e gastos no intervalo de datas.
-    dados: [ [mes_nome, orcado_fmt, gasto_fmt, pct_fmt, status], ... ]
+    Aceita caminho em disco (str) ou buffer em memória (io.BytesIO).
     """
-    caminho = arquivo_destino or config.ARQUIVO_PDF
+    destino = arquivo_destino or config.ARQUIVO_PDF
     doc = SimpleDocTemplate(
-        caminho,
+        destino,
         pagesize=landscape(letter),
         rightMargin=25, leftMargin=25,
         topMargin=25,   bottomMargin=25,
     )
 
-    estilos = _estilos()
-    s = estilos
+    s = _estilos()
     agora = datetime.now().strftime("%d/%m/%Y às %H:%M")
     story = []
 
     story.append(Paragraph("Controle Orçamentário Empresarial — Visão Resumida", s["titulo"]))
-    story.append(Paragraph(f"<b>Período:</b> {periodo_texto}", s["subtitulo"]))
+    story.append(Paragraph(f"<b>Período:</b> {_esc(periodo_texto)}", s["subtitulo"]))
     story.append(Paragraph(f"Gerado em: {agora} &nbsp;|&nbsp; Total de períodos: <b>{len(dados)}</b>", s["data_geracao"]))
 
     if not dados:
         story.append(Spacer(1, 20))
         story.append(Paragraph("Nenhum dado encontrado para o período selecionado.", s["celula"]))
         doc.build(story)
-        return caminho
+        return destino
 
     cabecalhos = ["Mês / Período", "Orçado (R$)", "Gasto (R$)", "% Utilizado", "Status"]
     table_data = [[
@@ -132,11 +144,11 @@ def gerar_pdf_resumo(dados: list, periodo_texto: str = "Geral", arquivo_destino:
             estilo_status = s["celula_ok"]
 
         table_data.append([
-            Paragraph(str(linha[0]), s["celula_bold"]),
-            Paragraph(str(linha[1]), s["celula_centro"]),
-            Paragraph(str(linha[2]), s["celula_centro"]),
-            Paragraph(str(linha[3]), s["celula_centro"]),
-            Paragraph(status_texto, estilo_status),
+            Paragraph(_esc(linha[0]), s["celula_bold"]),
+            Paragraph(_esc(linha[1]), s["celula_centro"]),
+            Paragraph(_esc(linha[2]), s["celula_centro"]),
+            Paragraph(_esc(linha[3]), s["celula_centro"]),
+            Paragraph(_esc(status_texto), estilo_status),
         ])
 
     comandos = [
@@ -159,37 +171,37 @@ def gerar_pdf_resumo(dados: list, periodo_texto: str = "Geral", arquivo_destino:
         elif i % 2 == 0:
             comandos.append(("BACKGROUND", (0, i), (-1, i), COR_ZEBRA))
 
-    tabela = Table(table_data, colWidths=[120, 130, 130, 100, 190])
+    tabela = Table(table_data, colWidths=[120, 130, 130, 100, 190], repeatRows=1)
     tabela.setStyle(TableStyle(comandos))
 
     story.append(Spacer(1, 6))
     story.append(tabela)
     doc.build(story)
-    log.info(f"PDF Resumo '{caminho}' gerado com sucesso.")
-    return caminho
+    log.info("PDF Resumo gerado com sucesso.")
+    return destino
 
 
-def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gasto: str = "R$ 0,00", arquivo_destino: str = None) -> str:
+def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gasto: str = "R$ 0,00", arquivo_destino=None):
     """
     Gera o PDF com a visão detalhada de despesas individuais da empresa,
     discriminando Setor, Fornecedor, Categoria e Destino.
+    Aceita caminho em disco (str) ou buffer em memória (io.BytesIO).
     """
-    caminho = arquivo_destino or config.ARQUIVO_PDF
+    destino = arquivo_destino or config.ARQUIVO_PDF
     doc = SimpleDocTemplate(
-        caminho,
+        destino,
         pagesize=landscape(letter),
         rightMargin=20, leftMargin=20,
         topMargin=22,   bottomMargin=22,
     )
 
-    estilos = _estilos()
-    s = estilos
+    s = _estilos()
     agora = datetime.now().strftime("%d/%m/%Y às %H:%M")
     story = []
 
     story.append(Paragraph("Controle de Despesas Empresarial — Relatório Detalhado", s["titulo"]))
     story.append(Paragraph(
-        f"<b>Período:</b> {periodo_texto} &nbsp;|&nbsp; <b>Total Gasto:</b> {total_gasto}",
+        f"<b>Período:</b> {_esc(periodo_texto)} &nbsp;|&nbsp; <b>Total Gasto:</b> {_esc(total_gasto)}",
         s["subtitulo"]
     ))
     story.append(Paragraph(
@@ -201,7 +213,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         story.append(Spacer(1, 20))
         story.append(Paragraph("Nenhuma despesa encontrada para o período selecionado.", s["celula"]))
         doc.build(story)
-        return caminho
+        return destino
 
     cabecalhos = ["Data", "Descrição", "Setor", "Fornecedor", "Categoria", "Destino", "Valor (R$)"]
     table_data = [[
@@ -216,13 +228,13 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
 
     for d in despesas:
         table_data.append([
-            Paragraph(str(d.get("data", "")), s["celula_centro"]),
-            Paragraph(str(d.get("descricao", "")), s["celula"]),
-            Paragraph(str(d.get("setor", "-")), s["celula"]),
-            Paragraph(str(d.get("fornecedor", "-")), s["celula"]),
-            Paragraph(str(d.get("categoria", "-")), s["celula"]),
-            Paragraph(str(d.get("destino", "-")), s["celula"]),
-            Paragraph(str(d.get("valor_fmt", "")), s["celula_bold"]),
+            Paragraph(_esc(d.get("data", "")), s["celula_centro"]),
+            Paragraph(_esc(d.get("descricao", "")), s["celula"]),
+            Paragraph(_esc(d.get("setor", "-")), s["celula"]),
+            Paragraph(_esc(d.get("fornecedor", "-")), s["celula"]),
+            Paragraph(_esc(d.get("categoria", "-")), s["celula"]),
+            Paragraph(_esc(d.get("destino", "-")), s["celula"]),
+            Paragraph(_esc(d.get("valor_fmt", "")), s["celula_bold"]),
         ])
 
     # Linha de total
@@ -233,7 +245,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         Paragraph("", s["celula"]),
         Paragraph("", s["celula"]),
         Paragraph("", s["celula"]),
-        Paragraph(total_gasto, s["celula_bold"]),
+        Paragraph(_esc(total_gasto), s["celula_bold"]),
     ])
 
     comandos = [
@@ -253,14 +265,15 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         if i % 2 == 0:
             comandos.append(("BACKGROUND", (0, i), (-1, i), COR_ZEBRA))
 
-    tabela = Table(table_data, colWidths=[58, 175, 95, 110, 95, 95, 84])
+    tabela = Table(table_data, colWidths=[58, 175, 95, 110, 95, 95, 84], repeatRows=1)
     tabela.setStyle(TableStyle(comandos))
 
     story.append(Spacer(1, 4))
     story.append(tabela)
     doc.build(story)
-    log.info(f"PDF Detalhado '{caminho}' gerado com sucesso.")
-    return caminho
+    log.info("PDF Detalhado gerado com sucesso.")
+    return destino
+
 
 
 def criar_pdf(dados: list) -> None:

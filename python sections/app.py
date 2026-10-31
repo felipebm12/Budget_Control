@@ -1,10 +1,16 @@
+import io
 import logging
+import math
 import os
+import threading
+import time
 from functools import wraps
 from pathlib import Path
 from datetime import date, datetime
+from urllib.parse import urlsplit
 from flask import Flask, render_template, jsonify, request, send_file, send_from_directory, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+import config
 import database
 import report
 
@@ -20,14 +26,79 @@ PASTA_FONTES = _DIR_SCRIPT / "fonts"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.DEBUG if config.FLASK_DEBUG else logging.INFO,
     format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", os.urandom(32))
+app.secret_key = config.SECRET_KEY
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "0").strip().lower() in ("1", "true", "yes")
+
+# ── Rate Limiting em Memória (Proteção contra Força Bruta) ───────────────────
+_rate_limit_lock = threading.Lock()
+_rate_limit_buckets: dict[str, list[float]] = {}
+
+
+def _verificar_rate_limit(chave: str, max_tentativas: int, janela_segundos: int) -> bool:
+    """Retorna True se dentro do limite, False se excedeu a cota na janela de tempo."""
+    agora = time.monotonic()
+    with _rate_limit_lock:
+        timestamps = _rate_limit_buckets.get(chave, [])
+        timestamps = [t for t in timestamps if (agora - t) < janela_segundos]
+        if len(timestamps) >= max_tentativas:
+            _rate_limit_buckets[chave] = timestamps
+            return False
+        timestamps.append(agora)
+        _rate_limit_buckets[chave] = timestamps
+        return True
+
+
+def _limpar_rate_limit(chave: str) -> None:
+    with _rate_limit_lock:
+        _rate_limit_buckets.pop(chave, None)
+
+
+def _url_redirecionamento_segura(destino: str | None) -> bool:
+    """Garante que o parâmetro next aponte apenas para caminhos relativos locais (evita Open Redirect)."""
+    if not destino:
+        return False
+    destino = destino.strip()
+    if not destino.startswith("/") or destino.startswith("//") or destino.startswith("/\\"):
+        return False
+    partes = urlsplit(destino)
+    return not partes.scheme and not partes.netloc
+
+
+@app.before_request
+def _proteger_csrf_mesma_origem():
+    """Valida Origin/Referer em requisições de mutação para mitigar CSRF cross-origin."""
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        origin = request.headers.get("Origin")
+        referer = request.headers.get("Referer")
+        host_atual = request.host
+
+        if origin and origin != "null":
+            if urlsplit(origin).netloc != host_atual:
+                return jsonify({"erro": "Requisição bloqueada: origem inválida (CSRF)."}), 403
+        elif referer:
+            if urlsplit(referer).netloc != host_atual:
+                return jsonify({"erro": "Requisição bloqueada: referenciador inválido (CSRF)."}), 403
+
+
+@app.after_request
+def _aplicar_headers_seguranca(response):
+    """Adiciona cabeçalhos HTTP de segurança e políticas de cache em todas as respostas."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if request.path.startswith("/fonts/") or request.path == "/favicon.ico":
+        response.headers.setdefault("Cache-Control", "public, max-age=604800, immutable")
+    return response
+
 
 # ── Flask-Login ───────────────────────────────────────────────────────────────
 
@@ -38,12 +109,19 @@ login_manager.login_message = "Faça login para acessar o sistema."
 
 
 class Usuario(UserMixin):
-    """Representa o usuário autenticado na sessão Flask."""
+    """Representa o usuário autenticado na sessão Flask, incluindo suas permissões granulares."""
     def __init__(self, data: dict):
         self.id = str(data["id"])
         self.username = data["username"]
         self.nome_completo = data["nome_completo"]
         self.tipo = data["tipo"]
+        self.permissoes = database.normalizar_permissoes(data.get("permissoes"), self.tipo)
+
+    def tem_permissao(self, chave: str) -> bool:
+        """Retorna True se o usuário for admin ou possuir a permissão especificada."""
+        if self.tipo == "admin":
+            return True
+        return bool(self.permissoes.get(chave, False))
 
 
 @login_manager.user_loader
@@ -68,17 +146,33 @@ def login():
 
     erro = None
     if request.method == "POST":
+        ip_cliente = request.remote_addr or "unknown"
+        chave_rl = f"login:{ip_cliente}"
+        if not _verificar_rate_limit(chave_rl, max_tentativas=8, janela_segundos=60):
+            erro = "Muitas tentativas de login. Aguarde 1 minuto e tente novamente."
+            log.warning(f"Rate limit atingido no login para IP: {ip_cliente}")
+            return render_template("login.html", erro=erro), 429
+
         username = (request.form.get("username") or "").strip()
         senha = request.form.get("senha") or ""
 
         usuario_data = database.buscar_usuario_por_username(username)
-        if usuario_data and database.verificar_senha(senha, usuario_data["senha_hash"]):
+        if usuario_data:
+            senha_valida = database.verificar_senha(senha, usuario_data["senha_hash"])
+        else:
+            database.verificar_senha_dummy(senha)
+            senha_valida = False
+
+        if usuario_data and senha_valida:
+            _limpar_rate_limit(chave_rl)
             usuario_obj = Usuario(usuario_data)
             login_user(usuario_obj, remember=False)
             database.atualizar_ultimo_acesso(usuario_data["id"])
             log.info(f"Login bem-sucedido: {username}")
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("index"))
+            if _url_redirecionamento_segura(next_page):
+                return redirect(next_page)
+            return redirect(url_for("index"))
         else:
             erro = "Usuário ou senha incorretos."
             log.warning(f"Tentativa de login falhou para: '{username}'")
@@ -86,10 +180,15 @@ def login():
     return render_template("login.html", erro=erro)
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 @login_required
 def logout():
     """Encerra a sessão do usuário."""
+    if request.method == "GET":
+        referer = request.headers.get("Referer", "")
+        if referer and urlsplit(referer).netloc != request.host:
+            return redirect(url_for("index"))
+    database.invalidar_cache_usuario(int(current_user.id))
     log.info(f"Logout: {current_user.username}")
     logout_user()
     return redirect(url_for("login"))
@@ -99,6 +198,10 @@ def logout():
 @login_required
 def api_trocar_senha():
     """Troca a senha do usuário autenticado."""
+    chave_rl = f"trocar_senha:{current_user.id}"
+    if not _verificar_rate_limit(chave_rl, max_tentativas=5, janela_segundos=60):
+        return jsonify({"erro": "Muitas tentativas. Aguarde 1 minuto antes de tentar novamente."}), 429
+
     data = request.get_json() or {}
     senha_atual = data.get("senha_atual") or ""
     nova_senha = data.get("nova_senha") or ""
@@ -117,6 +220,7 @@ def api_trocar_senha():
 
     try:
         database.trocar_senha(int(current_user.id), nova_senha)
+        _limpar_rate_limit(chave_rl)
         log.info(f"Senha alterada: {current_user.username}")
         return jsonify({"sucesso": True, "mensagem": "Senha alterada com sucesso!"})
     except ValueError as ve:
@@ -124,6 +228,7 @@ def api_trocar_senha():
     except Exception as e:
         log.error(f"Erro ao trocar senha: {e}")
         return jsonify({"erro": "Erro interno ao alterar senha."}), 500
+
 
 
 def admin_required(f):
@@ -134,6 +239,15 @@ def admin_required(f):
             return jsonify({"erro": "Acesso negado. Apenas administradores podem executar esta ação."}), 403
         return f(*args, **kwargs)
     return decorated_function
+
+
+def _negar_se_sem_permissao(chave: str, descricao_acao: str):
+    """Retorna uma resposta JSON 403 caso o usuário atual não possua a permissão especificada, ou None se permitido."""
+    if not current_user.is_authenticated or not current_user.tem_permissao(chave):
+        return jsonify({
+            "erro": f"Acesso negado: você não possui permissão para {descricao_acao}. Solicite liberação ao administrador."
+        }), 403
+    return None
 
 
 # ── Gestão de Usuários (Administrador) ───────────────────────────────────────
@@ -161,9 +275,10 @@ def api_cadastrar_usuario():
     senha = dados.get("senha", "")
     nome_completo = dados.get("nome_completo", "")
     tipo = dados.get("tipo", "usuario")
+    permissoes = dados.get("permissoes")
 
     try:
-        novo = database.cadastrar_usuario(username, senha, nome_completo, tipo)
+        novo = database.cadastrar_usuario(username, senha, nome_completo, tipo, permissoes=permissoes)
         log.info(f"Usuário criado por {current_user.username}: {novo['username']} ({novo['tipo']})")
         return jsonify({"sucesso": True, "usuario": novo, "mensagem": f"Usuário '{novo['username']}' cadastrado com sucesso!"}), 201
     except ValueError as ve:
@@ -177,14 +292,22 @@ def api_cadastrar_usuario():
 @login_required
 @admin_required
 def api_atualizar_usuario(user_id: int):
-    """Atualiza dados do usuário (nome, perfil e status ativo/inativo)."""
+    """Atualiza dados do usuário (nome, perfil, status ativo/inativo e permissões)."""
     dados = request.get_json() or {}
     nome_completo = dados.get("nome_completo", "")
     tipo = dados.get("tipo", "usuario")
     ativo = bool(dados.get("ativo", True))
+    permissoes = dados.get("permissoes")
 
     try:
-        atualizado = database.atualizar_usuario(user_id, nome_completo, tipo, ativo, int(current_user.id))
+        atualizado = database.atualizar_usuario(
+            user_id,
+            nome_completo,
+            tipo,
+            ativo,
+            int(current_user.id),
+            permissoes=permissoes,
+        )
         log.info(f"Usuário ID={user_id} atualizado por {current_user.username}: {atualizado['username']}")
         return jsonify({"sucesso": True, "usuario": atualizado, "mensagem": "Usuário atualizado com sucesso!"})
     except ValueError as ve:
@@ -192,6 +315,29 @@ def api_atualizar_usuario(user_id: int):
     except Exception as e:
         log.error(f"Erro ao atualizar usuário ID={user_id}: {e}")
         return jsonify({"erro": "Falha interna ao atualizar usuário."}), 500
+
+
+@app.route("/api/usuarios/<int:user_id>/permissoes", methods=["PUT"])
+@login_required
+@admin_required
+def api_atualizar_permissoes_usuario(user_id: int):
+    """Atualiza as permissões granulares de um usuário específico."""
+    dados = request.get_json() or {}
+    permissoes = dados.get("permissoes")
+
+    try:
+        atualizado = database.atualizar_permissoes_usuario(user_id, permissoes)
+        log.info(f"Permissões do usuário {atualizado['username']} atualizadas por {current_user.username}")
+        return jsonify({
+            "sucesso": True,
+            "usuario": atualizado,
+            "mensagem": f"Permissões de '{atualizado['username']}' atualizadas com sucesso!"
+        })
+    except ValueError as ve:
+        return jsonify({"erro": str(ve)}), 400
+    except Exception as e:
+        log.error(f"Erro ao atualizar permissões do usuário ID={user_id}: {e}")
+        return jsonify({"erro": "Falha interna ao atualizar permissões."}), 500
 
 
 @app.route("/api/usuarios/<int:user_id>/senha", methods=["PUT"])
@@ -258,6 +404,20 @@ def fonte(nome_arquivo: str):
     return send_from_directory(PASTA_FONTES, nome_arquivo)
 
 
+# ── Listas Auxiliares Consolidadas (Setores, Fornecedores e Categorias) ──────
+
+@app.route("/api/listas-auxiliares", methods=["GET"])
+@login_required
+def api_listas_auxiliares():
+    """Retorna setores, fornecedores e categorias em uma única requisição/conexão."""
+    try:
+        dados = database.buscar_listas_auxiliares()
+        return jsonify(dados)
+    except Exception as e:
+        log.error(f"Erro em /api/listas-auxiliares: {e}")
+        return jsonify({"erro": "Falha ao carregar listas auxiliares."}), 500
+
+
 # ── Setores (Departamentos / Centros de Custo) ────────────────────────────────
 
 @app.route("/api/setores", methods=["GET", "POST"])
@@ -265,6 +425,10 @@ def fonte(nome_arquivo: str):
 def api_setores():
     """GET: Lista todos os setores. POST: Cadastra novo setor."""
     if request.method == "POST":
+        negado = _negar_se_sem_permissao("setores_gerenciar", "cadastrar ou editar setores")
+        if negado:
+            return negado
+
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
         descricao = (data.get("descricao") or "").strip()
@@ -275,22 +439,28 @@ def api_setores():
         try:
             setor = database.cadastrar_setor(nome, descricao)
             return jsonify({"sucesso": True, "setor": setor}), 201
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao cadastrar setor: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível cadastrar o setor."}), 400
 
     try:
         setores = database.buscar_setores()
         return jsonify({"setores": setores})
     except Exception as e:
         log.error(f"Erro ao buscar setores: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar setores."}), 500
 
 
 @app.route("/api/setores/<int:setor_id>", methods=["PUT", "DELETE"])
 @login_required
 def api_setor_item(setor_id: int):
     """PUT: Atualiza setor. DELETE: Exclui setor (se desimpedido)."""
+    negado = _negar_se_sem_permissao("setores_gerenciar", "gerenciar setores")
+    if negado:
+        return negado
+
     if request.method == "PUT":
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
@@ -302,9 +472,11 @@ def api_setor_item(setor_id: int):
         try:
             setor = database.atualizar_setor(setor_id, nome, descricao)
             return jsonify({"sucesso": True, "setor": setor})
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao atualizar setor: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível atualizar o setor."}), 400
 
     # DELETE
     try:
@@ -314,7 +486,7 @@ def api_setor_item(setor_id: int):
         return jsonify({"erro": str(ve)}), 400
     except Exception as e:
         log.error(f"Erro ao excluir setor: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha interna ao excluir setor."}), 500
 
 
 # ── Fornecedores (Onde foi gasto o dinheiro) ──────────────────────────────────
@@ -324,6 +496,10 @@ def api_setor_item(setor_id: int):
 def api_fornecedores():
     """GET: Lista todos os fornecedores. POST: Cadastra novo fornecedor."""
     if request.method == "POST":
+        negado = _negar_se_sem_permissao("fornecedores_gerenciar", "cadastrar ou editar fornecedores")
+        if negado:
+            return negado
+
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
         descricao = (data.get("descricao") or "").strip()
@@ -334,22 +510,28 @@ def api_fornecedores():
         try:
             fornecedor = database.cadastrar_fornecedor(nome, descricao)
             return jsonify({"sucesso": True, "fornecedor": fornecedor}), 201
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao cadastrar fornecedor: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível cadastrar o fornecedor."}), 400
 
     try:
         fornecedores = database.buscar_fornecedores()
         return jsonify({"fornecedores": fornecedores})
     except Exception as e:
         log.error(f"Erro ao buscar fornecedores: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar fornecedores."}), 500
 
 
 @app.route("/api/fornecedores/<int:fornecedor_id>", methods=["PUT", "DELETE"])
 @login_required
 def api_fornecedor_item(fornecedor_id: int):
     """PUT: Atualiza fornecedor. DELETE: Exclui fornecedor (se desimpedido)."""
+    negado = _negar_se_sem_permissao("fornecedores_gerenciar", "gerenciar fornecedores")
+    if negado:
+        return negado
+
     if request.method == "PUT":
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
@@ -361,9 +543,11 @@ def api_fornecedor_item(fornecedor_id: int):
         try:
             fornecedor = database.atualizar_fornecedor(fornecedor_id, nome, descricao)
             return jsonify({"sucesso": True, "fornecedor": fornecedor})
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao atualizar fornecedor: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível atualizar o fornecedor."}), 400
 
     # DELETE
     try:
@@ -373,7 +557,7 @@ def api_fornecedor_item(fornecedor_id: int):
         return jsonify({"erro": str(ve)}), 400
     except Exception as e:
         log.error(f"Erro ao excluir fornecedor: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha interna ao excluir fornecedor."}), 500
 
 
 # ── Categorias (Rubricas) ────────────────────────────────────────────────────
@@ -384,6 +568,10 @@ def api_fornecedor_item(fornecedor_id: int):
 def api_categorias():
     """GET: Retorna lista de categorias cadastradas. POST: Cadastra nova categoria."""
     if request.method == "POST":
+        negado = _negar_se_sem_permissao("categorias_gerenciar", "cadastrar ou editar categorias")
+        if negado:
+            return negado
+
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
         descricao = (data.get("descricao") or "").strip()
@@ -394,22 +582,28 @@ def api_categorias():
         try:
             categoria = database.cadastrar_categoria(nome, descricao)
             return jsonify({"sucesso": True, "categoria": categoria}), 201
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao cadastrar categoria: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível cadastrar a categoria."}), 400
 
     try:
         categorias = database.buscar_categorias()
         return jsonify({"categorias": categorias, "destinos": categorias, "rubricas": categorias})
     except Exception as e:
         log.error(f"Erro em /api/categorias: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar categorias."}), 500
 
 
 @app.route("/api/categorias/<int:categoria_id>", methods=["PUT", "DELETE"])
 @login_required
 def api_categoria_item(categoria_id: int):
     """PUT: Atualiza categoria. DELETE: Exclui categoria (se desimpedida)."""
+    negado = _negar_se_sem_permissao("categorias_gerenciar", "gerenciar categorias")
+    if negado:
+        return negado
+
     if request.method == "PUT":
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
@@ -421,9 +615,11 @@ def api_categoria_item(categoria_id: int):
         try:
             categoria = database.atualizar_categoria(categoria_id, nome, descricao)
             return jsonify({"sucesso": True, "categoria": categoria})
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao atualizar categoria: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível atualizar a categoria."}), 400
 
     # DELETE
     try:
@@ -433,7 +629,7 @@ def api_categoria_item(categoria_id: int):
         return jsonify({"erro": str(ve)}), 400
     except Exception as e:
         log.error(f"Erro ao excluir categoria: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha interna ao excluir categoria."}), 500
 
 
 # ── Despesas ─────────────────────────────────────────────────────────────────
@@ -443,6 +639,9 @@ def api_categoria_item(categoria_id: int):
 def api_despesas():
     """GET: Lista despesas filtradas. POST: Cadastra nova despesa empresarial."""
     if request.method == "POST":
+        negado = _negar_se_sem_permissao("despesas_criar", "cadastrar novas despesas")
+        if negado:
+            return negado
         data = request.get_json() or {}
         descricao = (data.get("descricao") or "").strip()
         data_compra = (data.get("data_compra") or "").strip()
@@ -453,6 +652,8 @@ def api_despesas():
 
         try:
             valor = float(data.get("valor", 0))
+            if not math.isfinite(valor):
+                raise ValueError()
         except (ValueError, TypeError):
             return jsonify({"erro": "Valor numérico inválido."}), 400
 
@@ -480,9 +681,11 @@ def api_despesas():
                 destino=destino
             )
             return jsonify({"sucesso": True, "despesa": despesa}), 201
+        except ValueError as ve:
+            return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao cadastrar despesa: {e}")
-            return jsonify({"erro": str(e)}), 400
+            return jsonify({"erro": "Não foi possível registrar a despesa."}), 400
 
     # GET - Filtro dinâmico entre datas e parâmetros opcionais
     ano_atual = datetime.now().year
@@ -515,7 +718,7 @@ def api_despesas():
         })
     except Exception as e:
         log.error(f"Erro ao buscar despesas: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar despesas."}), 500
 
 
 @app.route("/api/despesas/<int:despesa_id>", methods=["PUT", "DELETE"])
@@ -523,6 +726,10 @@ def api_despesas():
 def api_despesa_item(despesa_id: int):
     """PUT: Atualiza lançamento de despesa. DELETE: Exclui despesa pelo ID."""
     if request.method == "PUT":
+        negado = _negar_se_sem_permissao("despesas_editar", "editar despesas")
+        if negado:
+            return negado
+
         data = request.get_json() or {}
         descricao = (data.get("descricao") or "").strip()
         data_compra = (data.get("data_compra") or "").strip()
@@ -533,6 +740,8 @@ def api_despesa_item(despesa_id: int):
 
         try:
             valor = float(data.get("valor", 0))
+            if not math.isfinite(valor):
+                raise ValueError()
         except (ValueError, TypeError):
             return jsonify({"erro": "Valor numérico inválido."}), 400
 
@@ -565,9 +774,13 @@ def api_despesa_item(despesa_id: int):
             return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao atualizar despesa {despesa_id}: {e}")
-            return jsonify({"erro": str(e)}), 500
+            return jsonify({"erro": "Falha interna ao atualizar despesa."}), 500
 
     # DELETE
+    negado = _negar_se_sem_permissao("despesas_excluir", "excluir despesas")
+    if negado:
+        return negado
+
     try:
         resultado = database.excluir_despesa(despesa_id)
         return jsonify({
@@ -578,15 +791,17 @@ def api_despesa_item(despesa_id: int):
         return jsonify({"erro": str(ve)}), 404
     except Exception as e:
         log.error(f"Erro ao excluir despesa {despesa_id}: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha interna ao excluir despesa."}), 500
 
 
-@app.route("/api/despesas/limpar-todas", methods=["DELETE", "POST"])
+@app.route("/api/despesas/limpar-todas", methods=["DELETE"])
 @login_required
+@admin_required
 def api_despesas_limpar_todas():
-    """Remove todas as despesas cadastradas no sistema."""
+    """Remove todas as despesas cadastradas no sistema (exclusivo para administradores)."""
     try:
         total = database.limpar_todas_despesas()
+        log.warning(f"Todas as despesas ({total}) foram excluídas por {current_user.username}")
         return jsonify({
             "sucesso": True,
             "total_removido": total,
@@ -594,7 +809,7 @@ def api_despesas_limpar_todas():
         })
     except Exception as e:
         log.error(f"Erro ao limpar todas as despesas: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha interna ao limpar despesas."}), 500
 
 
 # ── Orçamentos por Setor ──────────────────────────────────────────────────────
@@ -610,6 +825,9 @@ def api_orcamentos_setor():
          Upsert do orçamento de um mês específico de um setor.
     """
     if request.method == "POST":
+        negado = _negar_se_sem_permissao("orcamentos_editar", "definir ou editar orçamentos por setor")
+        if negado:
+            return negado
         data = request.get_json() or {}
         setor_id = data.get("setor_id")
         ano = data.get("ano")
@@ -626,6 +844,8 @@ def api_orcamentos_setor():
 
         try:
             valor = float(valor_raw or 0)
+            if not math.isfinite(valor):
+                raise ValueError()
         except (ValueError, TypeError):
             return jsonify({"erro": "Valor numérico inválido."}), 400
 
@@ -649,7 +869,7 @@ def api_orcamentos_setor():
             return jsonify({"erro": str(ve)}), 400
         except Exception as e:
             log.error(f"Erro ao salvar orcamento do setor: {e}")
-            return jsonify({"erro": str(e)}), 500
+            return jsonify({"erro": "Falha interna ao salvar orçamento do setor."}), 500
 
     # GET
     setor_id = request.args.get("setor_id", type=int)
@@ -673,7 +893,7 @@ def api_orcamentos_setor():
         })
     except Exception as e:
         log.error(f"Erro ao buscar orcamentos do setor: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar orçamentos do setor."}), 500
 
 
 @app.route("/api/orcamentos-setor/resumo", methods=["GET"])
@@ -689,7 +909,7 @@ def api_orcamentos_setor_resumo():
         return jsonify({"ano": ano, "setores": resumo})
     except Exception as e:
         log.error(f"Erro ao buscar resumo de orcamentos por setor: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao consultar resumo de orçamentos por setor."}), 500
 
 
 # ── Dados Consolidados (Visão Resumida) ──────────────────────────────────────
@@ -730,7 +950,7 @@ def api_dados():
         })
     except Exception as e:
         log.error(f"Erro em /api/dados: {e}")
-        return jsonify({"erro": str(e)}), 500
+        return jsonify({"erro": "Falha ao carregar dados consolidados."}), 500
 
 
 # ── Rota de Exportação de PDF ────────────────────────────────────────────────
@@ -738,7 +958,11 @@ def api_dados():
 @app.route("/api/exportar-pdf")
 @login_required
 def api_exportar_pdf():
-    """Gera e faz o download do arquivo PDF conforme o intervalo dinâmico de datas."""
+    """Gera o arquivo PDF em memória (BytesIO) e faz o download conforme o intervalo dinâmico de datas."""
+    negado = _negar_se_sem_permissao("relatorios_exportar", "exportar relatórios em PDF")
+    if negado:
+        return negado
+
     ano_atual = datetime.now().year
     data_inicio = request.args.get("data_inicio") or f"{ano_atual}-01-01"
     data_fim = request.args.get("data_fim") or f"{ano_atual}-12-31"
@@ -757,6 +981,7 @@ def api_exportar_pdf():
 
     periodo_texto = f"{dt_ini_fmt} a {dt_fim_fmt}"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    buffer_pdf = io.BytesIO()
 
     try:
         if visao == "detalhada":
@@ -771,13 +996,12 @@ def api_exportar_pdf():
             total_gasto_fmt = database._fmt_moeda(total_gasto_num)
 
             nome_arquivo = f"Despesas_Empresariais_{timestamp}.pdf"
-            caminho_pdf = str(PASTA_EXPORTACOES / nome_arquivo)
 
             report.gerar_pdf_detalhado(
                 despesas=despesas,
                 periodo_texto=periodo_texto,
                 total_gasto=total_gasto_fmt,
-                arquivo_destino=caminho_pdf
+                arquivo_destino=buffer_pdf
             )
         else:
             meses = database.buscar_dados_periodo(
@@ -793,24 +1017,24 @@ def api_exportar_pdf():
             ]
 
             nome_arquivo = f"Orcamento_Resumo_{timestamp}.pdf"
-            caminho_pdf = str(PASTA_EXPORTACOES / nome_arquivo)
 
             report.gerar_pdf_resumo(
                 dados=dados_tabela,
                 periodo_texto=periodo_texto,
-                arquivo_destino=caminho_pdf
+                arquivo_destino=buffer_pdf
             )
 
+        buffer_pdf.seek(0)
         return send_file(
-            caminho_pdf,
+            buffer_pdf,
             as_attachment=True,
             download_name=nome_arquivo,
             mimetype="application/pdf"
         )
     except Exception as e:
         log.error(f"Erro ao exportar PDF: {e}")
-        return jsonify({"erro": f"Falha ao gerar PDF: {str(e)}"}), 500
+        return jsonify({"erro": "Falha interna ao gerar o relatório em PDF."}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=config.FLASK_DEBUG, port=config.FLASK_PORT)
