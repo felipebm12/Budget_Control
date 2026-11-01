@@ -1453,8 +1453,8 @@ def cadastrar_usuario(
 
     if not username or len(username) < 3:
         raise ValueError("O login deve ter pelo menos 3 caracteres.")
-    if not re.match(r"^[a-z0-9._-]+$", username):
-        raise ValueError("O login deve conter apenas letras, números, pontos, traços ou sublinhados.")
+    if not re.match(r"^[a-z0-9]+$", username):
+        raise ValueError("O login deve conter apenas letras e números (sem símbolos ou espaços).")
     if not nome_completo:
         raise ValueError("O nome completo é obrigatório.")
     if tipo not in ("admin", "usuario"):

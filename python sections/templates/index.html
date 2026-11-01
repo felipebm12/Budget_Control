@@ -3458,7 +3458,7 @@
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
                 <div>
                   <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Login (Username) *</label>
-                  <input id="swal-novo-user-login" class="swal2-input" placeholder="Ex: joao.silva" style="margin:0; width:100%; box-sizing:border-box;">
+                  <input id="swal-novo-user-login" class="swal2-input" autocomplete="off" pattern="[A-Za-z0-9]+" title="Apenas letras e números (sem símbolos ou espaços)" placeholder="Ex: joaosilva" style="margin:0; width:100%; box-sizing:border-box;">
                 </div>
                 <div>
                   <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
@@ -3487,6 +3487,28 @@
           `,
           didOpen: () => {
             vincularTogglePerfilPermissoes("swal-novo-user-tipo", "swal-novo-user");
+            const inputLogin = document.getElementById("swal-novo-user-login");
+            if (inputLogin) {
+              inputLogin.addEventListener("keydown", (e) => {
+                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !/^[a-zA-Z0-9]$/.test(e.key)) {
+                  e.preventDefault();
+                }
+              });
+              inputLogin.addEventListener("input", () => {
+                const pos = inputLogin.selectionStart;
+                const antes = inputLogin.value;
+                const limpo = antes
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/[^a-zA-Z0-9]/g, "");
+                if (antes !== limpo) {
+                  const diff = antes.length - limpo.length;
+                  inputLogin.value = limpo;
+                  const novaPos = Math.max(0, (pos || limpo.length) - diff);
+                  inputLogin.setSelectionRange(novaPos, novaPos);
+                }
+              });
+            }
           },
           focusConfirm: false,
           showCancelButton: true,
@@ -3509,8 +3531,8 @@
               Swal.showValidationMessage("O login deve ter pelo menos 3 caracteres.");
               return false;
             }
-            if (!/^[a-z0-9._-]+$/.test(username)) {
-              Swal.showValidationMessage("O login deve conter apenas letras minúsculas, números, '.', '_' ou '-'.");
+            if (!/^[a-z0-9]+$/.test(username)) {
+              Swal.showValidationMessage("O login deve conter apenas letras e números (sem símbolos ou espaços).");
               return false;
             }
             if (!nomeCompleto) {
