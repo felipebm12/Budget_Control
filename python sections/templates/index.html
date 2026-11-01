@@ -522,7 +522,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="desp-valor">Valor (R$) *</label>
-              <input type="number" id="desp-valor" class="form-control" placeholder="0,00" step="0.01" min="0.01" required />
+              <input type="text" inputmode="numeric" autocomplete="off" id="desp-valor" class="form-control" placeholder="0,00" value="0,00" required />
             </div>
             <div class="form-group">
               <label for="desp-data">Data da Compra *</label>
@@ -584,7 +584,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="edit-desp-valor">Valor (R$) *</label>
-              <input type="number" id="edit-desp-valor" class="form-control" placeholder="0,00" step="0.01" min="0.01" required />
+              <input type="text" inputmode="numeric" autocomplete="off" id="edit-desp-valor" class="form-control" placeholder="0,00" value="0,00" required />
             </div>
             <div class="form-group">
               <label for="edit-desp-data">Data da Compra *</label>
@@ -940,9 +940,103 @@
       ordenacao: { campo: "data", direcao: "desc" },
     };
 
-    // ── Utilitários de Formatação ──────────────────────────────────────────
+    // ── Utilitários de Formatação e Máscara Monetária ──────────────────────
     const fmtMoeda = (val) =>
       "R$ " + Number(val || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function fmtValorMoedaInput(val) {
+      const num = Number(val || 0);
+      if (!Number.isFinite(num) || num < 0) return "0,00";
+      return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function parseValorMoedaInput(str) {
+      const digitos = String(str ?? "").replace(/\D/g, "").slice(0, 11);
+      if (!digitos) return 0;
+      return parseInt(digitos, 10) / 100;
+    }
+
+    /**
+     * Aplica máscara de moeda padrão brasileiro (centavos e separador de milhar automáticos)
+     * e sobreposição imediata ao focar/digitar em qualquer input monetário do sistema.
+     */
+    function vincularMascaraMoeda(input, opcoes = {}) {
+      if (!input || input.dataset.mascaraMoedaVinculada === "1") return;
+      input.dataset.mascaraMoedaVinculada = "1";
+
+      input.addEventListener("focus", () => {
+        input.dataset.sobreporAoDigitar = "1";
+        setTimeout(() => input.select(), 0);
+      });
+
+      input.addEventListener("mouseup", (e) => {
+        if (input.dataset.sobreporAoDigitar === "1") {
+          e.preventDefault();
+          input.select();
+        }
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (opcoes.blurNoEnter && e.key === "Enter") {
+          e.preventDefault();
+          input.blur();
+          return;
+        }
+        if (e.key === "Escape" && typeof opcoes.aoCancelar === "function") {
+          e.preventDefault();
+          input.dataset.sobreporAoDigitar = "0";
+          opcoes.aoCancelar(input);
+          return;
+        }
+
+        if (input.dataset.sobreporAoDigitar === "1") {
+          if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            const novoValor = parseInt(e.key, 10) / 100;
+            input.value = fmtValorMoedaInput(novoValor);
+            input.dataset.sobreporAoDigitar = "0";
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+            if (typeof opcoes.aoAlterar === "function") opcoes.aoAlterar(input);
+            return;
+          }
+          if (e.key === "Backspace" || e.key === "Delete") {
+            e.preventDefault();
+            input.value = "0,00";
+            input.dataset.sobreporAoDigitar = "0";
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+            if (typeof opcoes.aoAlterar === "function") opcoes.aoAlterar(input);
+            return;
+          }
+        }
+      });
+
+      input.addEventListener("input", (e) => {
+        if (input.dataset.sobreporAoDigitar === "1") {
+          input.dataset.sobreporAoDigitar = "0";
+          if (e.inputType === "insertText" && e.data && /\d/.test(e.data)) {
+            const dig = e.data.replace(/\D/g, "").slice(0, 11);
+            input.value = fmtValorMoedaInput(dig ? parseInt(dig, 10) / 100 : 0);
+          } else {
+            input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+          }
+        } else {
+          input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+        }
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+        if (typeof opcoes.aoAlterar === "function") opcoes.aoAlterar(input);
+      });
+
+      input.addEventListener("blur", async () => {
+        input.dataset.sobreporAoDigitar = "0";
+        input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+        if (typeof opcoes.aoSair === "function") {
+          await opcoes.aoSair(input);
+        }
+      });
+    }
 
     const fmtPct = (val) =>
       Number(val || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
@@ -2496,15 +2590,23 @@
     });
 
     // ── Abrir Modal Nova Despesa com Campos Totalmente Limpos ─────────────
+    vincularMascaraMoeda(document.getElementById("desp-valor"));
+    vincularMascaraMoeda(document.getElementById("edit-desp-valor"));
+
     function abrirModalNovaDespesa() {
       const form = document.getElementById("form-despesa");
       if (form) form.reset();
 
-      // Limpeza explícita dos campos de texto e valor
-      ["desp-descricao", "desp-valor", "desp-destino"].forEach((id) => {
+      // Limpeza explícita dos campos de texto e valor com máscara padrão 0,00
+      ["desp-descricao", "desp-destino"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = "";
       });
+      const elValor = document.getElementById("desp-valor");
+      if (elValor) {
+        elValor.value = "0,00";
+        elValor.dataset.sobreporAoDigitar = "1";
+      }
 
       // Reset dos selects dinâmicos para a opção padrão ("")
       ["desp-setor", "desp-fornecedor", "desp-categoria"].forEach((id) => {
@@ -2542,13 +2644,20 @@
     // ── Submit: Cadastrar Despesa ──────────────────────────────────────────
     document.getElementById("form-despesa").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const valorNumerico = parseValorMoedaInput(document.getElementById("desp-valor").value);
+      if (valorNumerico <= 0) {
+        avisarErro("O valor da despesa deve ser maior que R$ 0,00.");
+        document.getElementById("desp-valor")?.focus();
+        return;
+      }
+
       const btn = document.getElementById("btn-salvar-despesa");
       btn.disabled = true;
       btn.textContent = "Gravando despesa...";
 
       const payload = {
         descricao: document.getElementById("desp-descricao").value.trim(),
-        valor: parseFloat(document.getElementById("desp-valor").value),
+        valor: valorNumerico,
         data_compra: document.getElementById("desp-data").value,
         setor_id: document.getElementById("desp-setor").value,
         fornecedor_id: document.getElementById("desp-fornecedor").value,
@@ -2570,10 +2679,12 @@
 
         avisarSucesso("Despesa cadastrada com sucesso!");
         document.getElementById("form-despesa").reset();
-        ["desp-descricao", "desp-valor", "desp-destino", "desp-setor", "desp-fornecedor", "desp-categoria"].forEach((id) => {
+        ["desp-descricao", "desp-destino", "desp-setor", "desp-fornecedor", "desp-categoria"].forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.value = "";
         });
+        const elValor = document.getElementById("desp-valor");
+        if (elValor) elValor.value = "0,00";
         document.getElementById("desp-data").value = new Date().toISOString().split("T")[0];
         fecharModal("modal-despesa");
 
@@ -2603,7 +2714,9 @@
       // Preencher campos
       document.getElementById("edit-desp-id").value = d.id;
       document.getElementById("edit-desp-descricao").value = d.descricao;
-      document.getElementById("edit-desp-valor").value = d.valor;
+      const editValEl = document.getElementById("edit-desp-valor");
+      editValEl.value = fmtValorMoedaInput(d.valor);
+      editValEl.dataset.sobreporAoDigitar = "1";
       document.getElementById("edit-desp-data").value = d.data_raw;
       document.getElementById("edit-desp-setor").value = d.setor_id || "";
       document.getElementById("edit-desp-fornecedor").value = d.fornecedor_id || "";
@@ -2615,6 +2728,13 @@
 
     document.getElementById("form-editar-despesa").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const valorNumerico = parseValorMoedaInput(document.getElementById("edit-desp-valor").value);
+      if (valorNumerico <= 0) {
+        avisarErro("O valor da despesa deve ser maior que R$ 0,00.");
+        document.getElementById("edit-desp-valor")?.focus();
+        return;
+      }
+
       const id = document.getElementById("edit-desp-id").value;
       const btn = document.getElementById("btn-salvar-edicao-despesa");
       btn.disabled = true;
@@ -2622,7 +2742,7 @@
 
       const payload = {
         descricao: document.getElementById("edit-desp-descricao").value.trim(),
-        valor: parseFloat(document.getElementById("edit-desp-valor").value),
+        valor: valorNumerico,
         data_compra: document.getElementById("edit-desp-data").value,
         setor_id: document.getElementById("edit-desp-setor").value,
         fornecedor_id: document.getElementById("edit-desp-fornecedor").value,
@@ -2730,18 +2850,6 @@
       }
     }
 
-    function fmtValorMoedaInput(val) {
-      const num = Number(val || 0);
-      if (!Number.isFinite(num) || num < 0) return "0,00";
-      return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function parseValorMoedaInput(str) {
-      const digitos = String(str ?? "").replace(/\D/g, "").slice(0, 11);
-      if (!digitos) return 0;
-      return parseInt(digitos, 10) / 100;
-    }
-
     function replicarOrcamentoSeMarcado(inputOrigem) {
       const chk = document.getElementById("chk-orc-aplicar-todos");
       if (chk && chk.checked) {
@@ -2807,85 +2915,21 @@
         if (!podeEditarOrc) return;
 
         const input = card.querySelector(`#orc-input-mes-${m.mes}`);
-
-        // Ao focar ou clicar no campo, marca para que o primeiro dígito sobreponha o valor atual
-        input.addEventListener("focus", () => {
-          input.dataset.sobreporAoDigitar = "1";
-          setTimeout(() => input.select(), 0);
-        });
-
-        input.addEventListener("mouseup", (e) => {
-          if (input.dataset.sobreporAoDigitar === "1") {
-            e.preventDefault();
-            input.select();
-          }
-        });
-
-        input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            input.blur();
-            return;
-          }
-          if (e.key === "Escape") {
-            e.preventDefault();
-            input.dataset.sobreporAoDigitar = "0";
-            input.value = fmtValorMoedaInput(m.valor_orcado);
-            input.blur();
-            return;
-          }
-
-          if (input.dataset.sobreporAoDigitar === "1") {
-            if (/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-              e.preventDefault();
-              const novoValor = parseInt(e.key, 10) / 100;
-              input.value = fmtValorMoedaInput(novoValor);
-              input.dataset.sobreporAoDigitar = "0";
-              const len = input.value.length;
-              input.setSelectionRange(len, len);
-              replicarOrcamentoSeMarcado(input);
-              return;
-            }
-            if (e.key === "Backspace" || e.key === "Delete") {
-              e.preventDefault();
-              input.value = "0,00";
-              input.dataset.sobreporAoDigitar = "0";
-              const len = input.value.length;
-              input.setSelectionRange(len, len);
-              replicarOrcamentoSeMarcado(input);
-              return;
-            }
-          }
-        });
-
-        // Máscara automática de moeda (centavos e separador de milhar) e replicação em tempo real
-        input.addEventListener("input", (e) => {
-          if (input.dataset.sobreporAoDigitar === "1") {
-            input.dataset.sobreporAoDigitar = "0";
-            if (e.inputType === "insertText" && e.data && /\d/.test(e.data)) {
-              const dig = e.data.replace(/\D/g, "").slice(0, 11);
-              input.value = fmtValorMoedaInput(dig ? parseInt(dig, 10) / 100 : 0);
+        vincularMascaraMoeda(input, {
+          blurNoEnter: true,
+          aoAlterar: (inp) => replicarOrcamentoSeMarcado(inp),
+          aoCancelar: (inp) => {
+            inp.value = fmtValorMoedaInput(m.valor_orcado);
+            inp.blur();
+          },
+          aoSair: async (inp) => {
+            const chk = document.getElementById("chk-orc-aplicar-todos");
+            if (chk && chk.checked) {
+              await salvarOrcamentoTodosMeses(inp, estado.mesesOrcamentoAtual || meses);
             } else {
-              input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
+              await salvarOrcamentoMes(inp, m);
             }
-          } else {
-            input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
-          }
-          const len = input.value.length;
-          input.setSelectionRange(len, len);
-          replicarOrcamentoSeMarcado(input);
-        });
-
-        // Salvar automaticamente ao sair do campo (blur)
-        input.addEventListener("blur", async () => {
-          input.dataset.sobreporAoDigitar = "0";
-          input.value = fmtValorMoedaInput(parseValorMoedaInput(input.value));
-          const chk = document.getElementById("chk-orc-aplicar-todos");
-          if (chk && chk.checked) {
-            await salvarOrcamentoTodosMeses(input, estado.mesesOrcamentoAtual || meses);
-          } else {
-            await salvarOrcamentoMes(input, m);
-          }
+          },
         });
       });
     }
