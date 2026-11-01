@@ -1089,11 +1089,24 @@
         let va = a[campo];
         let vb = b[campo];
 
+        // Ordenação cronológica por Ano + Mês (ex: Jan/2025..Dez/2025 -> Jan/2026..Dez/2026)
+        if (campo === "mes_num") {
+          const chaveA = (Number(a.ano) || 0) * 100 + (Number(a.mes_num) || 0);
+          const chaveB = (Number(b.ano) || 0) * 100 + (Number(b.mes_num) || 0);
+          return direcao === "asc" ? chaveA - chaveB : chaveB - chaveA;
+        }
+
         // Campos numéricos
-        if (["mes_num", "orcado", "gasto", "saldo", "percentual", "valor"].includes(campo)) {
+        if (["orcado", "gasto", "saldo", "percentual", "valor"].includes(campo)) {
           va = Number(va) || 0;
           vb = Number(vb) || 0;
-          return direcao === "asc" ? va - vb : vb - va;
+          if (va !== vb) {
+            return direcao === "asc" ? va - vb : vb - va;
+          }
+          // Desempate cronológico quando houver ano/mes_num
+          const chaveA = (Number(a.ano) || 0) * 100 + (Number(a.mes_num) || 0);
+          const chaveB = (Number(b.ano) || 0) * 100 + (Number(b.mes_num) || 0);
+          return chaveA - chaveB;
         }
 
         // Ordenação por data usando o campo raw (YYYY-MM-DD)
