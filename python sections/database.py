@@ -18,10 +18,11 @@ log = logging.getLogger(__name__)
 # ── Pool de Conexões e Cache Leve de Sessão ──────────────────────────────────
 _db_pool: pool.ThreadedConnectionPool | None = None
 _pool_lock = threading.Lock()
+_preaquecimento_iniciado = False
 
 _user_cache: dict[int, tuple[float, dict]] = {}
 _user_cache_lock = threading.Lock()
-_USER_CACHE_TTL = 30.0  # segundos
+_USER_CACHE_TTL = 60.0  # segundos
 
 # Hash constante para mitigar enumeração de usuários via Timing Attack no login
 _DUMMY_BCRYPT_HASH = "$2b$12$TSRXe0YOedg7P3hEyYPT..opCzIbv2A8d1ahBhCXwJ1kK.3bDLihS"
@@ -34,7 +35,7 @@ def _obter_pool() -> pool.ThreadedConnectionPool:
         with _pool_lock:
             if _db_pool is None:
                 _db_pool = pool.ThreadedConnectionPool(
-                    minconn=1,
+                    minconn=2,
                     maxconn=15,
                     host=config.DB_HOST,
                     port=config.DB_PORT,
@@ -42,13 +43,33 @@ def _obter_pool() -> pool.ThreadedConnectionPool:
                     user=config.DB_USER,
                     password=config.DB_PASSWORD,
                     sslmode="require",
-                    connect_timeout=30,
+                    connect_timeout=15,
                     keepalives=1,
                     keepalives_idle=30,
                     keepalives_interval=10,
                     keepalives_count=5,
                 )
     return _db_pool
+
+
+def preaquecer_pool_async() -> None:
+    """
+    Pré-aquece o pool de conexões PostgreSQL/SSL em segundo plano (daemon thread)
+    para que o handshake TCP/TLS com o Supabase já esteja pronto antes do usuário clicar em Entrar.
+    """
+    global _preaquecimento_iniciado
+    if _db_pool is not None or _preaquecimento_iniciado:
+        return
+    _preaquecimento_iniciado = True
+
+    def _worker():
+        try:
+            _obter_pool()
+            _garantir_coluna_permissoes()
+        except Exception as e:
+            log.debug(f"Pré-aquecimento do pool ignorado: {e}")
+
+    threading.Thread(target=_worker, daemon=True, name="db-pool-warmup").start()
 
 
 def invalidar_cache_usuario(user_id: int | None = None) -> None:
@@ -129,26 +150,35 @@ def calcular_status_orcamento(pct: float, orcado: float = 0, gasto: float = 0) -
 
 @contextmanager
 def get_db_connection():
-    """Obtém uma conexão do pool PostgreSQL/Supabase e a devolve automaticamente ao final do bloco."""
+    """
+    Obtém uma conexão do pool PostgreSQL/Supabase com autocommit ativado
+    (evitando roundtrips extras de BEGIN/COMMIT em cada consulta remota)
+    e a devolve automaticamente ao final do bloco.
+    """
     db_pool = _obter_pool()
     conn = db_pool.getconn()
     try:
         if conn.closed:
             db_pool.putconn(conn, close=True)
             conn = db_pool.getconn()
+        if not conn.autocommit:
+            conn.autocommit = True
         yield conn
-        if not conn.closed:
-            conn.commit()
-    except Exception:
-        if not conn.closed:
+    except psycopg2.OperationalError:
+        # Se a conexão caiu por ociosidade no servidor remoto, descarta do pool
+        if conn is not None:
             try:
-                conn.rollback()
+                db_pool.putconn(conn, close=True)
             except Exception:
                 pass
+            conn = None
         raise
     finally:
         if conn is not None:
-            db_pool.putconn(conn, close=bool(conn.closed))
+            try:
+                db_pool.putconn(conn, close=bool(conn.closed))
+            except Exception:
+                pass
 
 
 def buscar_anos() -> list[int]:
@@ -493,80 +523,66 @@ buscar_destinos = buscar_categorias
 
 def buscar_listas_auxiliares() -> dict:
     """
-    Carrega setores, fornecedores e categorias utilizando uma única conexão do pool,
-    evitando 3 round-trips independentes de conexão quando o dashboard inicializa.
+    Carrega setores, fornecedores e categorias em uma única query SQL unificada
+    com GROUPING SETS, reduzindo 3 varreduras e 3 roundtrips de rede para apenas 1.
     """
-    q_setores = """
-        SELECT s.id, s.nome, COALESCE(s.descricao, '') AS descricao,
-               COUNT(d.id) AS total_despesas, COALESCE(SUM(d.valor), 0) AS total_gasto
+    query = """
+        WITH agg AS (
+            SELECT
+                GROUPING(setor_id, fornecedor_id, rubrica_id) AS grp,
+                setor_id,
+                fornecedor_id,
+                rubrica_id,
+                COUNT(id) AS total_despesas,
+                COALESCE(SUM(valor), 0) AS total_gasto
+            FROM despesas
+            GROUP BY GROUPING SETS ((setor_id), (fornecedor_id), (rubrica_id))
+        )
+        SELECT 'setor' AS tipo, s.id, s.nome, COALESCE(s.descricao, '') AS descricao,
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
         FROM setores s
-        LEFT JOIN despesas d ON d.setor_id = s.id
-        GROUP BY s.id, s.nome, s.descricao
-        ORDER BY s.nome ASC;
-    """
-    q_fornecedores = """
-        SELECT f.id, f.nome, COALESCE(f.descricao, '') AS descricao,
-               COUNT(d.id) AS total_despesas, COALESCE(SUM(d.valor), 0) AS total_gasto
+        LEFT JOIN agg a ON a.grp = 3 AND a.setor_id = s.id
+        UNION ALL
+        SELECT 'fornecedor' AS tipo, f.id, f.nome, COALESCE(f.descricao, '') AS descricao,
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
         FROM fornecedores f
-        LEFT JOIN despesas d ON d.fornecedor_id = f.id
-        GROUP BY f.id, f.nome, f.descricao
-        ORDER BY f.nome ASC;
-    """
-    q_categorias = """
-        SELECT r.id, r.nome, COALESCE(r.descricao, '') AS descricao,
-               COUNT(d.id) AS total_despesas, COALESCE(SUM(d.valor), 0) AS total_gasto
+        LEFT JOIN agg a ON a.grp = 5 AND a.fornecedor_id = f.id
+        UNION ALL
+        SELECT 'categoria' AS tipo, r.id, r.nome, COALESCE(r.descricao, '') AS descricao,
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
         FROM rubricas r
-        LEFT JOIN despesas d ON d.rubrica_id = r.id
-        GROUP BY r.id, r.nome, r.descricao
-        ORDER BY r.nome ASC;
+        LEFT JOIN agg a ON a.grp = 6 AND a.rubrica_id = r.id
+        ORDER BY tipo ASC, nome ASC;
     """
+    setores = []
+    fornecedores = []
+    categorias = []
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(q_setores)
-                setores = [
-                    {
-                        "id": r[0],
-                        "nome": r[1],
-                        "descricao": r[2],
-                        "total_despesas": r[3],
-                        "total_gasto": float(r[4]),
-                        "total_gasto_fmt": _fmt_moeda(r[4]),
+                cur.execute(query)
+                for tipo_item, item_id, nome, descricao, total_despesas, total_gasto in cur.fetchall():
+                    gasto_num = float(total_gasto or 0)
+                    registro = {
+                        "id": item_id,
+                        "nome": nome,
+                        "descricao": descricao,
+                        "total_despesas": int(total_despesas or 0),
+                        "total_gasto": gasto_num,
+                        "total_gasto_fmt": _fmt_moeda(gasto_num),
                     }
-                    for r in cur.fetchall()
-                ]
+                    if tipo_item == "setor":
+                        setores.append(registro)
+                    elif tipo_item == "fornecedor":
+                        fornecedores.append(registro)
+                    else:
+                        categorias.append(registro)
 
-                cur.execute(q_fornecedores)
-                fornecedores = [
-                    {
-                        "id": r[0],
-                        "nome": r[1],
-                        "descricao": r[2],
-                        "total_despesas": r[3],
-                        "total_gasto": float(r[4]),
-                        "total_gasto_fmt": _fmt_moeda(r[4]),
-                    }
-                    for r in cur.fetchall()
-                ]
-
-                cur.execute(q_categorias)
-                categorias = [
-                    {
-                        "id": r[0],
-                        "nome": r[1],
-                        "descricao": r[2],
-                        "total_despesas": r[3],
-                        "total_gasto": float(r[4]),
-                        "total_gasto_fmt": _fmt_moeda(r[4]),
-                    }
-                    for r in cur.fetchall()
-                ]
-
-                return {
-                    "setores": setores,
-                    "fornecedores": fornecedores,
-                    "categorias": categorias,
-                }
+        return {
+            "setores": setores,
+            "fornecedores": fornecedores,
+            "categorias": categorias,
+        }
     except Exception as e:
         log.error(f"Erro ao buscar listas auxiliares consolidadas: {e}")
         return {"setores": [], "fornecedores": [], "categorias": []}
@@ -1236,8 +1252,11 @@ def _garantir_coluna_permissoes() -> None:
 
 
 def buscar_usuario_por_username(username: str) -> dict | None:
-    """Retorna o dict do usuário pelo username, ou None se não encontrado / inativo."""
-    _garantir_coluna_permissoes()
+    """
+    Retorna o dict do usuário pelo username, ou None se não encontrado / inativo.
+    Popula imediatamente o _user_cache por ID para evitar nova consulta no redirect pós-login.
+    """
+    global _schema_permissoes_ok
     query = """
         SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb)
         FROM usuarios
@@ -1247,12 +1266,17 @@ def buscar_usuario_por_username(username: str) -> dict | None:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (username,))
+                try:
+                    cur.execute(query, (username,))
+                    _schema_permissoes_ok = True
+                except psycopg2.errors.UndefinedColumn:
+                    _garantir_coluna_permissoes()
+                    cur.execute(query, (username,))
                 row = cur.fetchone()
                 if not row:
                     return None
                 tipo = row[4]
-                return {
+                dados = {
                     "id": row[0],
                     "username": row[1],
                     "senha_hash": row[2],
@@ -1261,6 +1285,11 @@ def buscar_usuario_por_username(username: str) -> dict | None:
                     "ativo": row[5],
                     "permissoes": normalizar_permissoes(row[6], tipo),
                 }
+                with _user_cache_lock:
+                    _user_cache[int(row[0])] = (time.monotonic(), dados)
+                copia = dict(dados)
+                copia["permissoes"] = dict(dados["permissoes"])
+                return copia
     except Exception as e:
         log.error(f"Erro ao buscar usuário '{username}': {e}")
         return None
@@ -1269,9 +1298,10 @@ def buscar_usuario_por_username(username: str) -> dict | None:
 def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
     """
     Retorna o dict do usuário pelo ID (usado pelo user_loader do flask-login).
-    Utiliza cache em memória de curta duração (TTL=30s) invalidado imediatamente em edições/exclusões,
+    Utiliza cache em memória (TTL=60s) invalidado imediatamente em edições/exclusões,
     evitando consultas repetidas ao banco em cada requisição de página/API.
     """
+    global _schema_permissoes_ok
     uid = int(user_id)
     agora = time.monotonic()
     with _user_cache_lock:
@@ -1281,7 +1311,6 @@ def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
             copia["permissoes"] = dict(cached[1].get("permissoes", {}))
             return copia
 
-    _garantir_coluna_permissoes()
     query = """
         SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb)
         FROM usuarios
@@ -1291,7 +1320,12 @@ def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (uid,))
+                try:
+                    cur.execute(query, (uid,))
+                    _schema_permissoes_ok = True
+                except psycopg2.errors.UndefinedColumn:
+                    _garantir_coluna_permissoes()
+                    cur.execute(query, (uid,))
                 row = cur.fetchone()
                 if not row:
                     invalidar_cache_usuario(uid)
@@ -1349,9 +1383,18 @@ def atualizar_ultimo_acesso(user_id: int) -> None:
                     "UPDATE usuarios SET ultimo_acesso = now() WHERE id = %s;",
                     (user_id,)
                 )
-                conn.commit()
     except Exception as e:
         log.error(f"Erro ao atualizar último acesso (user_id={user_id}): {e}")
+
+
+def atualizar_ultimo_acesso_async(user_id: int) -> None:
+    """Atualiza ultimo_acesso em thread de segundo plano para não bloquear o tempo de resposta do login."""
+    threading.Thread(
+        target=atualizar_ultimo_acesso,
+        args=(int(user_id),),
+        daemon=True,
+        name=f"last-access-{user_id}",
+    ).start()
 
 
 def trocar_senha(user_id: int, nova_senha: str) -> None:

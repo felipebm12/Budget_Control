@@ -1,4 +1,5 @@
 import csv
+import gzip
 import io
 import logging
 import math
@@ -7,9 +8,9 @@ import threading
 import time
 from functools import wraps
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit
-from flask import Flask, render_template, jsonify, request, send_file, send_from_directory, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, send_file, send_from_directory, redirect, url_for, flash, session
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import config
 import database
@@ -38,6 +39,11 @@ app.secret_key = config.SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "0").strip().lower() in ("1", "true", "yes")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800  # 7 dias para arquivos estáticos (/static/css/style.css)
+
+# Inicia o pré-aquecimento assíncrono do pool PostgreSQL/SSL logo na subida da aplicação
+database.preaquecer_pool_async()
 
 # ── Rate Limiting em Memória (Proteção contra Força Bruta) ───────────────────
 _rate_limit_lock = threading.Lock()
@@ -48,6 +54,14 @@ def _verificar_rate_limit(chave: str, max_tentativas: int, janela_segundos: int)
     """Retorna True se dentro do limite, False se excedeu a cota na janela de tempo."""
     agora = time.monotonic()
     with _rate_limit_lock:
+        if len(_rate_limit_buckets) > 1000:
+            chaves_expiradas = [
+                k for k, ts in _rate_limit_buckets.items()
+                if not ts or (agora - ts[-1]) >= janela_segundos
+            ]
+            for k in chaves_expiradas:
+                _rate_limit_buckets.pop(k, None)
+
         timestamps = _rate_limit_buckets.get(chave, [])
         timestamps = [t for t in timestamps if (agora - t) < janela_segundos]
         if len(timestamps) >= max_tentativas:
@@ -82,8 +96,8 @@ def _proteger_csrf_mesma_origem():
         referer = request.headers.get("Referer")
         host_atual = request.host
 
-        if origin and origin != "null":
-            if urlsplit(origin).netloc != host_atual:
+        if origin:
+            if origin == "null" or urlsplit(origin).netloc != host_atual:
                 return jsonify({"erro": "Requisição bloqueada: origem inválida (CSRF)."}), 403
         elif referer:
             if urlsplit(referer).netloc != host_atual:
@@ -92,12 +106,34 @@ def _proteger_csrf_mesma_origem():
 
 @app.after_request
 def _aplicar_headers_seguranca(response):
-    """Adiciona cabeçalhos HTTP de segurança e políticas de cache em todas as respostas."""
+    """Adiciona cabeçalhos HTTP de segurança, políticas de cache e compressão Gzip."""
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    if request.path.startswith("/fonts/") or request.path == "/favicon.ico":
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+    if request.path.startswith("/fonts/") or request.path == "/favicon.ico" or request.path.startswith("/static/"):
         response.headers.setdefault("Cache-Control", "public, max-age=604800, immutable")
+    elif request.path.startswith("/api/") or request.path == "/":
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        response.headers.setdefault("Pragma", "no-cache")
+
+    # Compressão Gzip transparente para payloads HTML/JSON/CSS maiores que 1 KB
+    if (
+        not response.direct_passthrough
+        and response.status_code == 200
+        and "gzip" in request.headers.get("Accept-Encoding", "").lower()
+        and "Content-Encoding" not in response.headers
+        and any(ct in (response.content_type or "") for ct in ("text/html", "application/json", "text/css"))
+    ):
+        dados = response.get_data()
+        if len(dados) > 1024:
+            comprimido = gzip.compress(dados, compresslevel=5)
+            response.set_data(comprimido)
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Content-Length"] = str(len(comprimido))
+            response.headers["Vary"] = "Accept-Encoding"
+
     return response
 
 
@@ -145,17 +181,24 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
 
+    # Pré-aquece o pool em segundo plano enquanto o usuário está na tela de login
+    database.preaquecer_pool_async()
+
     erro = None
     if request.method == "POST":
         ip_cliente = request.remote_addr or "unknown"
-        chave_rl = f"login:{ip_cliente}"
-        if not _verificar_rate_limit(chave_rl, max_tentativas=8, janela_segundos=60):
-            erro = "Muitas tentativas de login. Aguarde 1 minuto e tente novamente."
-            log.warning(f"Rate limit atingido no login para IP: {ip_cliente}")
-            return render_template("login.html", erro=erro), 429
-
-        username = (request.form.get("username") or "").strip()
+        username = (request.form.get("username") or "").strip().lower()
         senha = request.form.get("senha") or ""
+
+        chave_rl_ip = f"login_ip:{ip_cliente}"
+        chave_rl_user = f"login_user:{username}" if username else chave_rl_ip
+
+        if not _verificar_rate_limit(chave_rl_ip, max_tentativas=10, janela_segundos=60) or (
+            username and not _verificar_rate_limit(chave_rl_user, max_tentativas=6, janela_segundos=60)
+        ):
+            erro = "Muitas tentativas de login. Aguarde 1 minuto e tente novamente."
+            log.warning(f"Rate limit atingido no login para IP={ip_cliente}, user='{username}'")
+            return render_template("login.html", erro=erro), 429
 
         usuario_data = database.buscar_usuario_por_username(username)
         if usuario_data:
@@ -165,10 +208,13 @@ def login():
             senha_valida = False
 
         if usuario_data and senha_valida:
-            _limpar_rate_limit(chave_rl)
+            _limpar_rate_limit(chave_rl_ip)
+            _limpar_rate_limit(chave_rl_user)
+            session.clear()
             usuario_obj = Usuario(usuario_data)
             login_user(usuario_obj, remember=False)
-            database.atualizar_ultimo_acesso(usuario_data["id"])
+            session.permanent = True
+            database.atualizar_ultimo_acesso_async(usuario_data["id"])
             log.info(f"Login bem-sucedido: {username}")
             next_page = request.args.get("next")
             if _url_redirecionamento_segura(next_page):
