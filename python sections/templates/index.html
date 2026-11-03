@@ -7,7 +7,8 @@
   <link rel="icon" type="image/png" href="{{ url_for('favicon') }}" />
   <link rel="apple-touch-icon" href="{{ url_for('favicon') }}" />
   <!-- SweetAlert2 CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="{{ url_for('static', filename='js/sweetalert2.all.min.js') }}"></script>
+  <script>window.Swal || document.write('<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"><\/script>');</script>
   <!-- Folha de Estilos Externa -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
