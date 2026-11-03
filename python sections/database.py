@@ -3,11 +3,13 @@ from contextlib import contextmanager
 import json
 import logging
 import math
+import os
 import threading
 import time
 from datetime import datetime, date
 from decimal import Decimal
 import psycopg2
+from psycopg2 import extensions as _pg_ext
 from psycopg2 import pool
 import bcrypt
 import config
@@ -15,10 +17,13 @@ import config
 
 log = logging.getLogger(__name__)
 
-# ── Pool de Conexões e Cache Leve de Sessão ──────────────────────────────────
+# ── Pool de Conexões (Fork-Safe para Gunicorn/Render) e Cache de Sessão ──────
 _db_pool: pool.ThreadedConnectionPool | None = None
+_pool_pid: int | None = None
 _pool_lock = threading.Lock()
-_preaquecimento_iniciado = False
+_preaquecimento_pid: int | None = None
+_conn_last_used: dict[int, float] = {}
+_CONN_IDLE_CHECK_SECONDS = 15.0
 
 _user_cache: dict[int, tuple[float, dict]] = {}
 _user_cache_lock = threading.Lock()
@@ -29,14 +34,18 @@ _DUMMY_BCRYPT_HASH = "$2b$12$TSRXe0YOedg7P3hEyYPT..opCzIbv2A8d1ahBhCXwJ1kK.3bDLi
 
 
 def _obter_pool() -> pool.ThreadedConnectionPool:
-    """Inicializa sob demanda (lazy) e retorna o pool thread-safe de conexões PostgreSQL."""
-    global _db_pool
-    if _db_pool is None:
+    """
+    Inicializa sob demanda (lazy) e retorna o pool thread-safe de conexões PostgreSQL.
+    Garante isolamento por PID (fork-safe) para evitar corrupção de sockets SSL ou deadlock no Gunicorn/Render.
+    """
+    global _db_pool, _pool_pid
+    pid_atual = os.getpid()
+    if _db_pool is None or _pool_pid != pid_atual:
         with _pool_lock:
-            if _db_pool is None:
+            if _db_pool is None or _pool_pid != pid_atual:
                 _db_pool = pool.ThreadedConnectionPool(
-                    minconn=2,
-                    maxconn=15,
+                    minconn=1,
+                    maxconn=10,
                     host=config.DB_HOST,
                     port=config.DB_PORT,
                     dbname=config.DB_NAME,
@@ -45,27 +54,31 @@ def _obter_pool() -> pool.ThreadedConnectionPool:
                     sslmode="require",
                     connect_timeout=15,
                     keepalives=1,
-                    keepalives_idle=30,
+                    keepalives_idle=20,
                     keepalives_interval=10,
-                    keepalives_count=5,
+                    keepalives_count=3,
                 )
+                _pool_pid = pid_atual
     return _db_pool
 
 
 def preaquecer_pool_async() -> None:
     """
     Pré-aquece o pool de conexões PostgreSQL/SSL em segundo plano (daemon thread)
-    para que o handshake TCP/TLS com o Supabase já esteja pronto antes do usuário clicar em Entrar.
+    quando a tela de login é aberta, garantindo que o handshake TCP/TLS com o Supabase
+    já esteja pronto no worker atual antes do usuário enviar a senha.
     """
-    global _preaquecimento_iniciado
-    if _db_pool is not None or _preaquecimento_iniciado:
+    global _preaquecimento_pid
+    pid_atual = os.getpid()
+    if (_db_pool is not None and _pool_pid == pid_atual) or _preaquecimento_pid == pid_atual:
         return
-    _preaquecimento_iniciado = True
+    _preaquecimento_pid = pid_atual
 
     def _worker():
         try:
-            _obter_pool()
-            _garantir_coluna_permissoes()
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1;")
         except Exception as e:
             log.debug(f"Pré-aquecimento do pool ignorado: {e}")
 
@@ -148,6 +161,40 @@ def calcular_status_orcamento(pct: float, orcado: float = 0, gasto: float = 0) -
     return "Dentro do orçamento"
 
 
+def _preparar_conexao(db_pool: pool.ThreadedConnectionPool, conn):
+    """
+    Garante que a conexão retirada do pool esteja viva, limpa e em autocommit=True.
+    Se a conexão ficou ociosa por mais de _CONN_IDLE_CHECK_SECONDS e foi encerrada
+    pelo Supabase/Render NAT, descarta-a e abre uma nova conexão transparente.
+    """
+    agora = time.monotonic()
+    for _ in range(2):
+        try:
+            if conn.closed:
+                db_pool.putconn(conn, close=True)
+                conn = db_pool.getconn()
+            if conn.info.transaction_status != _pg_ext.TRANSACTION_STATUS_IDLE:
+                conn.rollback()
+            if not conn.autocommit:
+                conn.autocommit = True
+
+            ultimo_uso = _conn_last_used.get(id(conn), 0.0)
+            if ultimo_uso > 0.0 and (agora - ultimo_uso) >= _CONN_IDLE_CHECK_SECONDS:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1;")
+            return conn
+        except Exception:
+            try:
+                _conn_last_used.pop(id(conn), None)
+                db_pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            conn = db_pool.getconn()
+            if not conn.autocommit:
+                conn.autocommit = True
+    return conn
+
+
 @contextmanager
 def get_db_connection():
     """
@@ -158,15 +205,13 @@ def get_db_connection():
     db_pool = _obter_pool()
     conn = db_pool.getconn()
     try:
-        if conn.closed:
-            db_pool.putconn(conn, close=True)
-            conn = db_pool.getconn()
-        if not conn.autocommit:
-            conn.autocommit = True
+        conn = _preparar_conexao(db_pool, conn)
         yield conn
-    except psycopg2.OperationalError:
-        # Se a conexão caiu por ociosidade no servidor remoto, descarta do pool
+        _conn_last_used[id(conn)] = time.monotonic()
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        # Se a conexão caiu no servidor remoto, descarta do pool
         if conn is not None:
+            _conn_last_used.pop(id(conn), None)
             try:
                 db_pool.putconn(conn, close=True)
             except Exception:
@@ -175,6 +220,11 @@ def get_db_connection():
         raise
     finally:
         if conn is not None:
+            try:
+                if not conn.closed and conn.info.transaction_status != _pg_ext.TRANSACTION_STATUS_IDLE:
+                    conn.rollback()
+            except Exception:
+                pass
             try:
                 db_pool.putconn(conn, close=bool(conn.closed))
             except Exception:
@@ -1231,7 +1281,7 @@ def normalizar_permissoes(permissoes_raw: dict | str | None, tipo: str = "usuari
     return resultado
 
 
-def _garantir_coluna_permissoes() -> None:
+def _garantir_coluna_permissoes(conn_existente=None) -> None:
     """Garante de forma transparente e idempotente que a coluna 'permissoes' exista na tabela 'usuarios'."""
     global _schema_permissoes_ok
     if _schema_permissoes_ok:
@@ -1239,13 +1289,20 @@ def _garantir_coluna_permissoes() -> None:
     with _schema_permissoes_lock:
         if _schema_permissoes_ok:
             return
+        sql = "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes jsonb NOT NULL DEFAULT '{}'::jsonb;"
         try:
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes jsonb NOT NULL DEFAULT '{}'::jsonb;"
-                    )
-                    conn.commit()
+            if conn_existente is not None:
+                if not conn_existente.autocommit:
+                    conn_existente.rollback()
+                with conn_existente.cursor() as cur_alt:
+                    cur_alt.execute(sql)
+                if not conn_existente.autocommit:
+                    conn_existente.commit()
+            else:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(sql)
+                        conn.commit()
             _schema_permissoes_ok = True
         except Exception as e:
             log.warning(f"Não foi possível verificar/criar coluna 'permissoes' em usuarios: {e}")
@@ -1253,14 +1310,17 @@ def _garantir_coluna_permissoes() -> None:
 
 def buscar_usuario_por_username(username: str) -> dict | None:
     """
-    Retorna o dict do usuário pelo username, ou None se não encontrado / inativo.
+    Retorna o dict do usuário pelo username (case-insensitive), ou None se não encontrado / inativo.
     Popula imediatamente o _user_cache por ID para evitar nova consulta no redirect pós-login.
     """
     global _schema_permissoes_ok
+    username = (username or "").strip()
+    if not username:
+        return None
     query = """
         SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb)
         FROM usuarios
-        WHERE username = %s AND ativo = true
+        WHERE LOWER(username) = LOWER(%s) AND ativo = true
         LIMIT 1;
     """
     try:
@@ -1270,7 +1330,7 @@ def buscar_usuario_por_username(username: str) -> dict | None:
                     cur.execute(query, (username,))
                     _schema_permissoes_ok = True
                 except psycopg2.errors.UndefinedColumn:
-                    _garantir_coluna_permissoes()
+                    _garantir_coluna_permissoes(conn)
                     cur.execute(query, (username,))
                 row = cur.fetchone()
                 if not row:
@@ -1324,7 +1384,7 @@ def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
                     cur.execute(query, (uid,))
                     _schema_permissoes_ok = True
                 except psycopg2.errors.UndefinedColumn:
-                    _garantir_coluna_permissoes()
+                    _garantir_coluna_permissoes(conn)
                     cur.execute(query, (uid,))
                 row = cur.fetchone()
                 if not row:

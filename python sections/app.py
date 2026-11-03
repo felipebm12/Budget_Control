@@ -1,5 +1,4 @@
 import csv
-import gzip
 import io
 import logging
 import math
@@ -41,9 +40,6 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "0").strip().lower() in ("1", "true", "yes")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 604800  # 7 dias para arquivos estáticos (/static/css/style.css)
-
-# Inicia o pré-aquecimento assíncrono do pool PostgreSQL/SSL logo na subida da aplicação
-database.preaquecer_pool_async()
 
 # ── Rate Limiting em Memória (Proteção contra Força Bruta) ───────────────────
 _rate_limit_lock = threading.Lock()
@@ -94,19 +90,20 @@ def _proteger_csrf_mesma_origem():
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         origin = request.headers.get("Origin")
         referer = request.headers.get("Referer")
-        host_atual = request.host
+        forwarded_host = (request.headers.get("X-Forwarded-Host") or "").split(",")[0].strip()
+        hosts_validos = {h for h in (request.host, forwarded_host) if h}
 
         if origin:
-            if origin == "null" or urlsplit(origin).netloc != host_atual:
+            if origin == "null" or urlsplit(origin).netloc not in hosts_validos:
                 return jsonify({"erro": "Requisição bloqueada: origem inválida (CSRF)."}), 403
         elif referer:
-            if urlsplit(referer).netloc != host_atual:
+            if urlsplit(referer).netloc not in hosts_validos:
                 return jsonify({"erro": "Requisição bloqueada: referenciador inválido (CSRF)."}), 403
 
 
 @app.after_request
 def _aplicar_headers_seguranca(response):
-    """Adiciona cabeçalhos HTTP de segurança, políticas de cache e compressão Gzip."""
+    """Adiciona cabeçalhos HTTP de segurança e políticas de cache em todas as respostas."""
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -117,22 +114,6 @@ def _aplicar_headers_seguranca(response):
     elif request.path.startswith("/api/") or request.path == "/":
         response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         response.headers.setdefault("Pragma", "no-cache")
-
-    # Compressão Gzip transparente para payloads HTML/JSON/CSS maiores que 1 KB
-    if (
-        not response.direct_passthrough
-        and response.status_code == 200
-        and "gzip" in request.headers.get("Accept-Encoding", "").lower()
-        and "Content-Encoding" not in response.headers
-        and any(ct in (response.content_type or "") for ct in ("text/html", "application/json", "text/css"))
-    ):
-        dados = response.get_data()
-        if len(dados) > 1024:
-            comprimido = gzip.compress(dados, compresslevel=5)
-            response.set_data(comprimido)
-            response.headers["Content-Encoding"] = "gzip"
-            response.headers["Content-Length"] = str(len(comprimido))
-            response.headers["Vary"] = "Accept-Encoding"
 
     return response
 
@@ -181,20 +162,23 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
 
-    # Pré-aquece o pool em segundo plano enquanto o usuário está na tela de login
-    database.preaquecer_pool_async()
-
     erro = None
-    if request.method == "POST":
-        ip_cliente = request.remote_addr or "unknown"
-        username = (request.form.get("username") or "").strip().lower()
+    if request.method == "GET":
+        # Pré-aquece o pool no worker atual do Gunicorn enquanto o usuário digita a senha
+        database.preaquecer_pool_async()
+        return render_template("login.html", erro=erro)
+
+    try:
+        ip_cliente = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()) or request.remote_addr or "unknown"
+        username = (request.form.get("username") or "").strip()
+        username_key = username.lower()
         senha = request.form.get("senha") or ""
 
         chave_rl_ip = f"login_ip:{ip_cliente}"
-        chave_rl_user = f"login_user:{username}" if username else chave_rl_ip
+        chave_rl_user = f"login_user:{username_key}" if username_key else chave_rl_ip
 
         if not _verificar_rate_limit(chave_rl_ip, max_tentativas=10, janela_segundos=60) or (
-            username and not _verificar_rate_limit(chave_rl_user, max_tentativas=6, janela_segundos=60)
+            username_key and not _verificar_rate_limit(chave_rl_user, max_tentativas=6, janela_segundos=60)
         ):
             erro = "Muitas tentativas de login. Aguarde 1 minuto e tente novamente."
             log.warning(f"Rate limit atingido no login para IP={ip_cliente}, user='{username}'")
@@ -210,7 +194,6 @@ def login():
         if usuario_data and senha_valida:
             _limpar_rate_limit(chave_rl_ip)
             _limpar_rate_limit(chave_rl_user)
-            session.clear()
             usuario_obj = Usuario(usuario_data)
             login_user(usuario_obj, remember=False)
             session.permanent = True
@@ -223,6 +206,9 @@ def login():
         else:
             erro = "Usuário ou senha incorretos."
             log.warning(f"Tentativa de login falhou para: '{username}'")
+    except Exception as e:
+        log.error(f"Erro interno no processamento do login: {e}")
+        erro = "Falha temporária de conexão. Tente novamente em instantes."
 
     return render_template("login.html", erro=erro)
 
