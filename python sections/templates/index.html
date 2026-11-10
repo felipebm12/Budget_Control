@@ -9,6 +9,9 @@
   <!-- SweetAlert2 CDN -->
   <script src="{{ url_for('static', filename='js/sweetalert2.all.min.js') }}"></script>
   <script>window.Swal || document.write('<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"><\/script>');</script>
+  <!-- html2canvas -->
+  <script src="{{ url_for('static', filename='js/html2canvas.min.js') }}"></script>
+  <script>window.html2canvas || document.write('<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"><\/script>');</script>
   <!-- Folha de Estilos Externa -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
@@ -154,6 +157,21 @@
               <div class="dropdown-item-texto">
                 <span class="dropdown-item-titulo">Exportar CSV</span>
                 <span class="dropdown-item-desc">Baixar despesas do período em planilha</span>
+              </div>
+            </button>
+
+            <!-- Exportar Imagem -->
+            <button type="button" class="dropdown-item" id="btn-exportar-imagem" title="Exportar captura de imagem (PNG) da tela ou dashboard">
+              <div class="dropdown-item-icone ic-roxo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
+              <div class="dropdown-item-texto">
+                <span class="dropdown-item-titulo">Exportar Imagem</span>
+                <span class="dropdown-item-desc">Capturar tela inteira ou dashboard (PNG)</span>
               </div>
             </button>
 
@@ -851,6 +869,14 @@
                 </svg>
                 <span>Exportar CSV</span>
               </button>
+              <button type="button" class="btn btn-outline btn-carregar-setor" id="btn-exportar-resumo-setor-imagem" style="gap:.4rem; padding:0 .95rem;" title="Exportar resumo por setor em imagem (PNG)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--roxo);">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <span>Exportar Imagem</span>
+              </button>
             </div>
           </div>
           <div class="orc-resumo-grid" id="orc-resumo-grid">
@@ -921,7 +947,7 @@
       { chave: "fornecedores_gerenciar", titulo: "Gerenciar Fornecedores", desc: "Criar, editar e excluir fornecedores", grupo: "Cadastros", padrao: false },
       { chave: "categorias_gerenciar", titulo: "Gerenciar Categorias", desc: "Criar, editar e excluir categorias/rubricas", grupo: "Cadastros", padrao: false },
       { chave: "orcamentos_editar", titulo: "Definir Orçamentos por Setor", desc: "Criar e alterar limites mensais de orçamento", grupo: "Orçamentos & Relatórios", padrao: false },
-      { chave: "relatorios_exportar", titulo: "Exportar Relatórios (PDF / CSV)", desc: "Baixar relatórios em PDF e planilhas CSV", grupo: "Orçamentos & Relatórios", padrao: true },
+      { chave: "relatorios_exportar", titulo: "Exportar Relatórios (PDF / CSV / Imagem)", desc: "Baixar relatórios em PDF, planilhas CSV e capturas em imagem", grupo: "Orçamentos & Relatórios", padrao: true },
     ];
 
     function temPermissao(chave) {
@@ -948,9 +974,11 @@
       const podeExportar = temPermissao("relatorios_exportar");
       const btnExportarPdf = document.getElementById("btn-exportar-pdf");
       const btnExportarCsv = document.getElementById("btn-exportar-csv");
+      const btnExportarImagem = document.getElementById("btn-exportar-imagem");
       const boxExportarResumoSetor = document.getElementById("box-exportar-resumo-setor");
       if (btnExportarPdf) btnExportarPdf.style.display = podeExportar ? "" : "none";
       if (btnExportarCsv) btnExportarCsv.style.display = podeExportar ? "" : "none";
+      if (btnExportarImagem) btnExportarImagem.style.display = podeExportar ? "" : "none";
       if (boxExportarResumoSetor) boxExportarResumoSetor.style.display = podeExportar ? "flex" : "none";
     }
 
@@ -2620,7 +2648,7 @@
       });
     });
 
-    // ── Exportação de PDF e CSV ────────────────────────────────────────────
+    // ── Exportação de PDF, CSV e Imagem (PNG) ─────────────────────────────
     document.getElementById("btn-exportar-pdf").addEventListener("click", () => {
       const url = `/api/exportar-pdf?${montarQueryParams()}&visao=${estado.visao}`;
       avisarSucesso("Gerando arquivo PDF do período selecionado...");
@@ -2631,6 +2659,181 @@
       const url = `/api/exportar-csv?${montarQueryParams()}`;
       avisarSucesso("Gerando planilha CSV das despesas do período...");
       window.location.href = url;
+    });
+
+    function gerarTimestampArquivo() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+
+    async function perguntarOpcaoExportacaoImagem(opcoes) {
+      let selecionada = opcoes[0].valor;
+      const cardsHtml = opcoes.map((op, idx) => `
+        <label class="swal-opcao-img-card" data-valor="${op.valor}" style="
+          display:flex; align-items:flex-start; gap:.85rem; padding:.95rem 1rem;
+          border:2px solid ${idx === 0 ? 'var(--primaria)' : 'var(--cinza-200)'};
+          background:${idx === 0 ? 'var(--primaria-light)' : 'var(--branco)'};
+          border-radius:10px; cursor:pointer; text-align:left; transition:all .15s ease;
+        ">
+          <input type="radio" name="swal-modo-imagem" value="${op.valor}" ${idx === 0 ? "checked" : ""} style="margin-top:.22rem; accent-color:var(--primaria); transform:scale(1.15); cursor:pointer;" />
+          <div style="display:flex; flex-direction:column; gap:.2rem;">
+            <span style="font-weight:700; font-size:.92rem; color:var(--cinza-800);">${op.titulo}</span>
+            <span style="font-size:.78rem; color:var(--cinza-600); line-height:1.35;">${op.descricao}</span>
+          </div>
+        </label>
+      `).join("");
+
+      const { isConfirmed, value } = await Swal.fire({
+        title: "Exportar Imagem (PNG)",
+        html: `
+          <div style="text-align:left; font-size:.84rem; color:var(--cinza-600); margin-bottom:.85rem;">
+            Escolha qual área você deseja capturar na imagem:
+          </div>
+          <div id="swal-lista-opcoes-img" style="display:flex; flex-direction:column; gap:.65rem;">
+            ${cardsHtml}
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Baixar Imagem (PNG)",
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "var(--primaria)",
+        didOpen: () => {
+          const cards = document.querySelectorAll(".swal-opcao-img-card");
+          cards.forEach((card) => {
+            card.addEventListener("click", () => {
+              const val = card.getAttribute("data-valor");
+              selecionada = val;
+              const radio = card.querySelector('input[type="radio"]');
+              if (radio) radio.checked = true;
+              cards.forEach((c) => {
+                const ativo = c === card;
+                c.style.borderColor = ativo ? "var(--primaria)" : "var(--cinza-200)";
+                c.style.background = ativo ? "var(--primaria-light)" : "var(--branco)";
+              });
+            });
+          });
+        },
+        preConfirm: () => selecionada
+      });
+
+      return isConfirmed ? value : null;
+    }
+
+    async function capturarEBaixarElementoPng(elementoAlvo, nomeArquivo, opcoesExtras = {}) {
+      if (typeof html2canvas !== "function") {
+        avisarErro("Biblioteca de captura de imagem (html2canvas) não está carregada.");
+        return;
+      }
+
+      // Aguardar fechamento da animação do modal/menu antes de capturar
+      await new Promise((r) => setTimeout(r, 150));
+
+      const restaurarEstilos = [];
+      function salvarEstilo(el, prop, novoValor) {
+        if (!el) return;
+        restaurarEstilos.push({ el, prop, valorAntigo: el.style[prop] });
+        el.style[prop] = novoValor;
+      }
+
+      try {
+        // Expandir containers com scroll para não cortar linhas nem colunas
+        elementoAlvo.querySelectorAll(".tabela-scroll, .painel-tabela").forEach((el) => {
+          salvarEstilo(el, "overflow", "visible");
+          salvarEstilo(el, "overflowX", "visible");
+          salvarEstilo(el, "overflowY", "visible");
+          salvarEstilo(el, "maxHeight", "none");
+        });
+
+        if (opcoesExtras.expandirModal) {
+          const modalCard = elementoAlvo.classList.contains("modal-card")
+            ? elementoAlvo
+            : elementoAlvo.closest(".modal-card");
+          const modalBody = modalCard ? modalCard.querySelector(".modal-body") : null;
+          if (modalCard) {
+            salvarEstilo(modalCard, "maxHeight", "none");
+            salvarEstilo(modalCard, "overflow", "visible");
+            salvarEstilo(modalCard, "transform", "none");
+          }
+          if (modalBody) {
+            salvarEstilo(modalBody, "maxHeight", "none");
+            salvarEstilo(modalBody, "overflow", "visible");
+            salvarEstilo(modalBody, "overflowY", "visible");
+          }
+        }
+
+        const larguraAlvo = Math.max(elementoAlvo.scrollWidth, elementoAlvo.offsetWidth);
+        const alturaAlvo = Math.max(elementoAlvo.scrollHeight, elementoAlvo.offsetHeight);
+
+        const canvas = await html2canvas(elementoAlvo, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: opcoesExtras.backgroundColor || "#f3f4f6",
+          width: larguraAlvo,
+          height: alturaAlvo,
+          windowWidth: Math.max(document.documentElement.clientWidth, larguraAlvo + 48),
+          windowHeight: Math.max(document.documentElement.clientHeight, alturaAlvo + 48),
+          ignoreElements: (el) => {
+            if (!el) return false;
+            if (el.classList && el.classList.contains("swal2-container")) return true;
+            if (el.id === "painel-menu-sistema") return true;
+            if (opcoesExtras.ignorarSeletor && el.matches && el.matches(opcoesExtras.ignorarSeletor)) return true;
+            return false;
+          }
+        });
+
+        const link = document.createElement("a");
+        link.download = nomeArquivo;
+        link.href = canvas.toDataURL("image/png");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        avisarSucesso("Imagem PNG exportada com sucesso!");
+      } catch (err) {
+        console.error("Erro ao exportar imagem:", err);
+        avisarErro("Não foi possível gerar a imagem da tela.");
+      } finally {
+        for (let i = restaurarEstilos.length - 1; i >= 0; i--) {
+          const { el, prop, valorAntigo } = restaurarEstilos[i];
+          el.style[prop] = valorAntigo;
+        }
+      }
+    }
+
+    document.getElementById("btn-exportar-imagem")?.addEventListener("click", async () => {
+      const modo = await perguntarOpcaoExportacaoImagem([
+        {
+          valor: "completo",
+          titulo: "Painel Completo (Tela Inteira)",
+          descricao: "Inclui cabeçalho superior, barra de filtros ativos, cards de resumo (KPIs) e a tabela completa."
+        },
+        {
+          valor: "dashboard",
+          titulo: "Apenas o Dashboard (Cards + Tabela)",
+          descricao: "Captura somente os 4 indicadores de resumo e a tabela completa, sem cabeçalho nem barra de filtros."
+        }
+      ]);
+
+      if (!modo) return;
+
+      const sufixoVisao = estado.visao === "detalhada" ? "Detalhada" : "Resumida";
+      const ts = gerarTimestampArquivo();
+
+      if (modo === "dashboard") {
+        const mainEl = document.querySelector("main");
+        await capturarEBaixarElementoPng(
+          mainEl,
+          `Dashboard_Despesas_${sufixoVisao}_${ts}.png`,
+          { backgroundColor: "#f3f4f6" }
+        );
+      } else {
+        await capturarEBaixarElementoPng(
+          document.body,
+          `Painel_Completo_Despesas_${sufixoVisao}_${ts}.png`,
+          { backgroundColor: "#f3f4f6", ignorarSeletor: ".modal-backdrop" }
+        );
+      }
     });
 
 
@@ -3263,6 +3466,41 @@
         return;
       }
       window.location.href = `/api/orcamentos-setor/resumo/exportar-csv?ano=${ano}`;
+    });
+
+    document.getElementById("btn-exportar-resumo-setor-imagem")?.addEventListener("click", async () => {
+      const ano = parseInt(document.getElementById("orc-resumo-ano").value, 10) || new Date().getFullYear();
+      const modo = await perguntarOpcaoExportacaoImagem([
+        {
+          valor: "modal_completo",
+          titulo: "Painel Completo do Resumo por Setor",
+          descricao: "Inclui cabeçalho do modal, ano de referência e todos os cards de orçamento por setor."
+        },
+        {
+          valor: "apenas_cards",
+          titulo: "Apenas os Cards de Setores",
+          descricao: "Captura somente a grade com os cards de status e saldo de cada setor."
+        }
+      ]);
+
+      if (!modo) return;
+
+      const ts = gerarTimestampArquivo();
+      if (modo === "apenas_cards") {
+        const gridEl = document.getElementById("orc-resumo-grid");
+        await capturarEBaixarElementoPng(
+          gridEl,
+          `Cards_Orcamento_Setores_${ano}_${ts}.png`,
+          { backgroundColor: "#ffffff", expandirModal: true }
+        );
+      } else {
+        const modalCardEl = document.querySelector("#modal-orcamento-setor .modal-card");
+        await capturarEBaixarElementoPng(
+          modalCardEl,
+          `Resumo_Orcamento_Setores_${ano}_${ts}.png`,
+          { backgroundColor: "#ffffff", expandirModal: true, ignorarSeletor: "#box-exportar-resumo-setor, .modal-footer, .btn-fechar" }
+        );
+      }
     });
 
     // Carregamento automático ao selecionar setor ou trocar ano no modal

@@ -1,0 +1,100 @@
+======================================================================
+GUIA RAPIDO DE PERSONALIZACAO DE CORES - CONTROLE DE DESPESAS
+======================================================================
+
+Quase todas as cores do sistema ficam centralizadas em UM unico arquivo:
+Arquivo principal: python sections/static/css/style.css
+
+Logo no inicio do arquivo (linhas 4 a 32), dentro do bloco :root { ... },
+estao as variaveis globais de cor:
+
+  --primaria:       #050300;   (Cor principal atual: Preto/Escuro)
+  --primaria-hover: #3b3b3a;   (Cor ao passar o mouse nos botoes principais)
+  --primaria-light: #FEF3E2;   (Fundo claro de destaque / botoes ativos)
+  --verde:          #10b981;   (Verde principal)
+  --verde-hover:    #059669;   (Verde escuro / texto de status OK)
+  --verde-bg:       #d1fae5;   (Fundo das tags verdes)
+  --vermelho:       #dc2626;   (Vermelho de alerta / erro / exclusao)
+  --vermelho-bg:    #fee2e2;   (Fundo das tags vermelhas)
+  --azul:           #2563eb;   (Azul de fornecedores / edicao)
+  --azul-bg:        #dbeafe;   (Fundo das tags azuis)
+  --roxo:           #7c3aed;   (Roxo de categorias)
+  --roxo-bg:        #f3e8ff;   (Fundo das tags roxas)
+  --ambar:          #d97706;   (Laranja/Ambar das tags de setor)
+  --ambar-bg:       #272725;   (Fundo das tags de setor)
+
+----------------------------------------------------------------------
+1. MUDAR A COR PRINCIPAL DE TUDO DE UMA VEZ (LOGIN + BARRA SUPERIOR)
+----------------------------------------------------------------------
+Se voce quiser mudar a cor tema do sistema inteiro (Barra do topo,
+fundo do login, botoes principais) de uma so vez:
+- Arquivo: python sections/static/css/style.css
+- Linha 5: Altere o valor de --primaria (ex: de #050300 para #1e3a8a)
+- Linha 6: Altere o valor de --primaria-hover
+
+----------------------------------------------------------------------
+2. MUDAR APENAS A COR DE FUNDO DA TELA DE LOGIN (SEPARADO DO RESTO)
+----------------------------------------------------------------------
+Por padrao, a tela de login usa a variavel var(--primaria). Se quiser que
+o fundo do login tenha uma cor exclusiva diferente da barra superior:
+- Arquivo: python sections/templates/login.html
+- Linha 16 (dentro de body.login-page):
+  Troque:
+    background: var(--primaria);
+  Por sua cor desejada (ou degrade), exemplo:
+    background: #0f172a;
+
+Outros itens da tela de login no mesmo arquivo (login.html):
+- Linha 22 (.login-card): Cor de fundo da caixa central de login (#ffffff)
+- Linha 59 (.login-brand-icon): Cor do quadradinho do icone da logo
+- Linha 71 (.login-brand-texto h1): Cor do titulo "Controle de Despesas"
+- Linha 165 (.btn-login): Cor do botao "Entrar"
+
+----------------------------------------------------------------------
+3. MUDAR APENAS A BARRA DE CIMA (HEADER) DA PAGINA INICIAL
+----------------------------------------------------------------------
+Se quiser mudar somente a barra superior da tela principal sem afetar
+o resto do sistema:
+- Arquivo: python sections/static/css/style.css
+- Linha 77 (dentro de header { ... }):
+  Troque:
+    background: var(--primaria);
+  Pela cor desejada, exemplo:
+    background: #111827;
+- Linha 78: color: var(--branco); (cor dos textos da barra superior)
+
+----------------------------------------------------------------------
+4. COR DE FUNDO GERAL DA PAGINA INICIAL (ATRAS DOS CARDS E TABELA)
+----------------------------------------------------------------------
+- Arquivo: python sections/static/css/style.css
+- Linha 52 (dentro de body { ... }):
+  background: var(--cinza-100);  (ou coloque um codigo hex como #f3f4f6)
+
+----------------------------------------------------------------------
+5. BOTAO VERDE "NOVA DESPESA" / "GRAVAR DESPESA"
+----------------------------------------------------------------------
+- Arquivo: python sections/static/css/style.css
+- Linhas 147 a 161 (classe .btn-cadastrar-despesa):
+  Mude os codigos do linear-gradient (#10b981 e #059669).
+
+----------------------------------------------------------------------
+6. TAGS COLORIDAS NA TABELA DETALHADA (SETOR, FORNECEDOR, CATEGORIA)
+----------------------------------------------------------------------
+- Arquivo: python sections/static/css/style.css
+- Linha 785 (.badge-setor): Cor da tag de Setor e Setor Destino
+  (usa --ambar-bg para o fundo e --ambar para a letra, linhas 17 e 18)
+- Linha 786 (.badge-fornecedor): Cor da tag de Fornecedor
+  (usa --azul-bg e --azul, linhas 13 e 14)
+- Linha 787 (.badge-categoria): Cor da tag de Categoria
+  (usa --roxo-bg e --roxo, linhas 15 e 16)
+
+----------------------------------------------------------------------
+7. CORES DOS RELATORIOS EXPORTADOS EM PDF
+----------------------------------------------------------------------
+Os PDFs gerados tem paleta propria no Python:
+- Arquivo: python sections/report.py
+- Linhas 15 a 24:
+  COR_PRIMARIA   = colors.HexColor("#DB7E04")  (Cabecalho da tabela no PDF)
+  COR_PRIMARIA_E = colors.HexColor("#B5670A")  (Linha da soma total)
+  COR_ZEBRA      = colors.HexColor("#FFF8EE")  (Cor das linhas alternadas)
+======================================================================
