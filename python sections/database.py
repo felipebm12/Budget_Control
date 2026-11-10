@@ -256,15 +256,17 @@ def buscar_anos() -> list[int]:
 
 def buscar_setores() -> list[dict]:
     """Retorna lista de setores com estatísticas de despesas."""
+    _garantir_coluna_setor_destino()
     query = """
         SELECT s.id,
                s.nome,
                COALESCE(s.descricao, '') AS descricao,
                COUNT(d.id) AS total_despesas,
-               COALESCE(SUM(d.valor), 0) AS total_gasto
+               COALESCE(SUM(d.valor), 0) AS total_gasto,
+               COALESCE(s.realiza_compras, true) AS realiza_compras
         FROM setores s
         LEFT JOIN despesas d ON d.setor_id = s.id
-        GROUP BY s.id, s.nome, s.descricao
+        GROUP BY s.id, s.nome, s.descricao, s.realiza_compras
         ORDER BY s.nome ASC;
     """
     try:
@@ -280,6 +282,7 @@ def buscar_setores() -> list[dict]:
                         "total_despesas": r[3],
                         "total_gasto": float(r[4]),
                         "total_gasto_fmt": _fmt_moeda(r[4]),
+                        "realiza_compras": bool(r[5]),
                     }
                     for r in rows
                 ]
@@ -288,50 +291,60 @@ def buscar_setores() -> list[dict]:
         return []
 
 
-def cadastrar_setor(nome: str, descricao: str = "") -> dict:
+def cadastrar_setor(nome: str, descricao: str = "", realiza_compras: bool = True) -> dict:
     """Insere um novo setor no banco de dados."""
+    _garantir_coluna_setor_destino()
     nome = (nome or "").strip()
     if not nome:
         raise ValueError("O nome do setor é obrigatório.")
 
     query = """
-        INSERT INTO setores (nome, descricao)
-        VALUES (%s, %s)
-        RETURNING id, nome, descricao;
+        INSERT INTO setores (nome, descricao, realiza_compras)
+        VALUES (%s, %s, %s)
+        RETURNING id, nome, descricao, realiza_compras;
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (nome, descricao.strip()))
+                cur.execute(query, (nome, descricao.strip(), bool(realiza_compras)))
                 r = cur.fetchone()
                 conn.commit()
-                return {"id": r[0], "nome": r[1], "descricao": r[2], "total_despesas": 0, "total_gasto": 0, "total_gasto_fmt": "R$ 0,00"}
+                return {
+                    "id": r[0],
+                    "nome": r[1],
+                    "descricao": r[2],
+                    "realiza_compras": bool(r[3]),
+                    "total_despesas": 0,
+                    "total_gasto": 0,
+                    "total_gasto_fmt": "R$ 0,00",
+                }
     except Exception as e:
         log.error(f"Erro ao cadastrar setor: {e}")
         raise
 
 
-def atualizar_setor(setor_id: int, nome: str, descricao: str = "") -> dict:
+def atualizar_setor(setor_id: int, nome: str, descricao: str = "", realiza_compras: bool = True) -> dict:
     """Atualiza um setor existente."""
+    _garantir_coluna_setor_destino()
     nome = (nome or "").strip()
     if not nome:
         raise ValueError("O nome do setor é obrigatório.")
 
     query = """
         UPDATE setores
-        SET nome = %s, descricao = %s
+        SET nome = %s, descricao = %s, realiza_compras = %s
         WHERE id = %s
-        RETURNING id, nome, descricao;
+        RETURNING id, nome, descricao, realiza_compras;
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (nome, descricao.strip(), setor_id))
+                cur.execute(query, (nome, descricao.strip(), bool(realiza_compras), setor_id))
                 r = cur.fetchone()
                 if not r:
                     raise ValueError("Setor não encontrado.")
                 conn.commit()
-                return {"id": r[0], "nome": r[1], "descricao": r[2]}
+                return {"id": r[0], "nome": r[1], "descricao": r[2], "realiza_compras": bool(r[3])}
     except Exception as e:
         log.error(f"Erro ao atualizar setor: {e}")
         raise
@@ -339,9 +352,13 @@ def atualizar_setor(setor_id: int, nome: str, descricao: str = "") -> dict:
 
 def excluir_setor(setor_id: int) -> dict:
     """Exclui um setor caso não haja despesas vinculadas a ele."""
+    _garantir_coluna_setor_destino()
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM despesas WHERE setor_id = %s;", (setor_id,))
+            cur.execute(
+                "SELECT COUNT(*) FROM despesas WHERE setor_id = %s OR setor_destino_id = %s;",
+                (setor_id, setor_id),
+            )
             qtd = cur.fetchone()[0]
             if qtd > 0:
                 raise ValueError(
@@ -576,6 +593,7 @@ def buscar_listas_auxiliares() -> dict:
     Carrega setores, fornecedores e categorias em uma única query SQL unificada
     com GROUPING SETS, reduzindo 3 varreduras e 3 roundtrips de rede para apenas 1.
     """
+    _garantir_coluna_setor_destino()
     query = """
         WITH agg AS (
             SELECT
@@ -589,17 +607,20 @@ def buscar_listas_auxiliares() -> dict:
             GROUP BY GROUPING SETS ((setor_id), (fornecedor_id), (rubrica_id))
         )
         SELECT 'setor' AS tipo, s.id, s.nome, COALESCE(s.descricao, '') AS descricao,
-               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto,
+               COALESCE(s.realiza_compras, true) AS realiza_compras
         FROM setores s
         LEFT JOIN agg a ON a.grp = 3 AND a.setor_id = s.id
         UNION ALL
         SELECT 'fornecedor' AS tipo, f.id, f.nome, COALESCE(f.descricao, '') AS descricao,
-               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto,
+               true AS realiza_compras
         FROM fornecedores f
         LEFT JOIN agg a ON a.grp = 5 AND a.fornecedor_id = f.id
         UNION ALL
         SELECT 'categoria' AS tipo, r.id, r.nome, COALESCE(r.descricao, '') AS descricao,
-               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto
+               COALESCE(a.total_despesas, 0) AS total_despesas, COALESCE(a.total_gasto, 0) AS total_gasto,
+               true AS realiza_compras
         FROM rubricas r
         LEFT JOIN agg a ON a.grp = 6 AND a.rubrica_id = r.id
         ORDER BY tipo ASC, nome ASC;
@@ -611,7 +632,7 @@ def buscar_listas_auxiliares() -> dict:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(query)
-                for tipo_item, item_id, nome, descricao, total_despesas, total_gasto in cur.fetchall():
+                for tipo_item, item_id, nome, descricao, total_despesas, total_gasto, realiza_compras in cur.fetchall():
                     gasto_num = float(total_gasto or 0)
                     registro = {
                         "id": item_id,
@@ -622,6 +643,7 @@ def buscar_listas_auxiliares() -> dict:
                         "total_gasto_fmt": _fmt_moeda(gasto_num),
                     }
                     if tipo_item == "setor":
+                        registro["realiza_compras"] = bool(realiza_compras)
                         setores.append(registro)
                     elif tipo_item == "fornecedor":
                         fornecedores.append(registro)
@@ -776,9 +798,10 @@ def salvar_orcamento_setor_todos(setor_id: int, ano: int, valor: float) -> list[
 
 def buscar_resumo_orcamentos_setores(ano: int) -> list[dict]:
     """
-    Retorna resumo anual de orçamento × gasto real para todos os setores.
+    Retorna resumo anual de orçamento × gasto real para todos os setores habilitados para compras.
     Usa CTEs pré-agregadas para evitar produto cartesiano entre orcamentos_setores e despesas.
     """
+    _garantir_coluna_setor_destino()
     query = """
         WITH orc_ano AS (
             SELECT setor_id, COALESCE(SUM(valor), 0) AS total_orcado
@@ -801,6 +824,9 @@ def buscar_resumo_orcamentos_setores(ano: int) -> list[dict]:
         FROM setores s
         LEFT JOIN orc_ano o ON o.setor_id = s.id
         LEFT JOIN desp_ano d ON d.setor_id = s.id
+        WHERE COALESCE(s.realiza_compras, true) = true
+           OR COALESCE(o.total_orcado, 0) > 0
+           OR COALESCE(d.total_gasto, 0) > 0
         ORDER BY s.nome ASC;
     """
     try:
@@ -836,11 +862,12 @@ def buscar_resumo_orcamentos_setores(ano: int) -> list[dict]:
 
 # ── Consulta Resumida por Intervalo de Datas ─────────────────────────────────
 
-def buscar_dados_periodo(data_inicio: str, data_fim: str, setor_id: int = None, fornecedor_id: int = None, categoria_id: int = None) -> list[dict]:
+def buscar_dados_periodo(data_inicio: str, data_fim: str, setor_id: int = None, setor_destino_id: int = None, fornecedor_id: int = None, categoria_id: int = None) -> list[dict]:
     """
     Calcula os orçamentos e gastos mês a mês dentro do intervalo [data_inicio, data_fim],
-    com suporte a filtros por setor, fornecedor e categoria, usando CTEs pré-agregadas.
+    com suporte a filtros por setor responsável, setor de destino, fornecedor e categoria, usando CTEs pré-agregadas.
     """
+    _garantir_coluna_setor_destino()
     query = """
         WITH meses_periodo AS (
             SELECT generate_series(
@@ -866,6 +893,7 @@ def buscar_dados_periodo(data_inicio: str, data_fim: str, setor_id: int = None, 
             WHERE d.data_compra >= %s::date
               AND d.data_compra <= %s::date
               AND (%s::integer IS NULL OR d.setor_id = %s::integer)
+              AND (%s::integer IS NULL OR COALESCE(d.setor_destino_id, d.setor_id) = %s::integer)
               AND (%s::integer IS NULL OR d.fornecedor_id = %s::integer)
               AND (%s::integer IS NULL OR d.rubrica_id = %s::integer)
             GROUP BY date_trunc('month', d.data_compra)::date
@@ -907,6 +935,7 @@ def buscar_dados_periodo(data_inicio: str, data_fim: str, setor_id: int = None, 
                     setor_id, setor_id,
                     data_inicio, data_fim,
                     setor_id, setor_id,
+                    setor_destino_id, setor_destino_id,
                     fornecedor_id, fornecedor_id,
                     categoria_id, categoria_id
                 ))
@@ -970,10 +999,11 @@ def buscar_dados(ano: int = None, mes: int = None) -> list[list[str]]:
 
 # ── Consulta Detalhada por Intervalo de Datas ────────────────────────────────
 
-def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = None, fornecedor_id: int = None, categoria_id: int = None) -> list[dict]:
+def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = None, setor_destino_id: int = None, fornecedor_id: int = None, categoria_id: int = None) -> list[dict]:
     """
-    Retorna despesas detalhadas no período contemplando Setor, Fornecedor, Categoria e Destino.
+    Retorna despesas detalhadas no período contemplando Setor Responsável, Setor de Destino, Fornecedor, Categoria e Destino.
     """
+    _garantir_coluna_setor_destino()
     query = """
         SELECT d.id,
                d.descricao,
@@ -981,20 +1011,24 @@ def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = Non
                TO_CHAR(d.data_compra, 'DD/MM/YYYY') AS data_formatada,
                d.data_compra,
                COALESCE(s.nome, 'Sem Setor') AS setor,
+               COALESCE(sd.nome, s.nome, 'Sem Setor') AS setor_destino,
                COALESCE(f.nome, 'Sem Fornecedor') AS fornecedor,
                COALESCE(r.nome, 'Sem Categoria') AS categoria,
                COALESCE(d.destino, 'Geral') AS destino,
                EXTRACT(MONTH FROM d.data_compra)::integer AS mes,
                EXTRACT(YEAR FROM d.data_compra)::integer AS ano_compra,
                d.setor_id,
+               COALESCE(d.setor_destino_id, d.setor_id) AS setor_destino_id,
                d.fornecedor_id,
                d.rubrica_id AS categoria_id
         FROM despesas d
         LEFT JOIN setores s ON s.id = d.setor_id
+        LEFT JOIN setores sd ON sd.id = d.setor_destino_id
         LEFT JOIN fornecedores f ON f.id = d.fornecedor_id
         LEFT JOIN rubricas r ON r.id = d.rubrica_id
         WHERE d.data_compra >= %s AND d.data_compra <= %s
           AND (%s IS NULL OR d.setor_id = %s)
+          AND (%s IS NULL OR COALESCE(d.setor_destino_id, d.setor_id) = %s)
           AND (%s IS NULL OR d.fornecedor_id = %s)
           AND (%s IS NULL OR d.rubrica_id = %s)
         ORDER BY d.data_compra DESC, d.id DESC;
@@ -1006,6 +1040,7 @@ def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = Non
                 cur.execute(query, (
                     data_inicio, data_fim,
                     setor_id, setor_id,
+                    setor_destino_id, setor_destino_id,
                     fornecedor_id, fornecedor_id,
                     categoria_id, categoria_id
                 ))
@@ -1016,7 +1051,7 @@ def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = Non
 
     despesas = []
     for row in rows:
-        d_id, desc, val, dt_fmt, dt_raw, setor, fornecedor, categoria, destino, m_num, ano_c, s_id, f_id, c_id = row
+        d_id, desc, val, dt_fmt, dt_raw, setor, setor_destino, fornecedor, categoria, destino, m_num, ano_c, s_id, sd_id, f_id, c_id = row
         val_float = float(val or 0)
         m_nome = MESES_PT.get(m_num, f"Mês {m_num}" if m_num else "-")
 
@@ -1029,6 +1064,8 @@ def buscar_despesas_periodo(data_inicio: str, data_fim: str, setor_id: int = Non
             "data_raw": dt_raw.strftime("%Y-%m-%d") if dt_raw else "",
             "setor": setor,
             "setor_id": s_id,
+            "setor_destino": setor_destino,
+            "setor_destino_id": sd_id,
             "fornecedor": fornecedor,
             "fornecedor_id": f_id,
             "categoria": categoria,
@@ -1097,13 +1134,17 @@ def _obter_ou_criar_orcamento_mensal_id(cur, ano: int, mes: int) -> int:
 
 # ── Cadastro, Exclusão e Limpeza de Despesas ─────────────────────────────────
 
-def cadastrar_despesa(descricao: str, valor: float, data_compra: str, setor_id: int, fornecedor_id: int, categoria_id: int, destino: str = "") -> dict:
+def cadastrar_despesa(descricao: str, valor: float, data_compra: str, setor_id: int, fornecedor_id: int, categoria_id: int, destino: str = "", setor_destino_id: int | None = None) -> dict:
     """
     Cadastra uma nova despesa empresarial contemplando:
-    Setor, Fornecedor, Categoria, Destino, Descrição, Valor e Data.
+    Setor Responsável, Setor de Destino, Fornecedor, Categoria, Destino, Descrição, Valor e Data.
     """
+    _garantir_coluna_setor_destino()
     descricao = (descricao or "").strip()
-    destino = (destino or "").strip() or "Sede / Uso Geral"
+    destino_raw = (destino or "").strip()
+    if len(destino_raw) > 500:
+        raise ValueError("O campo Destino / Finalidade deve ter no máximo 500 caracteres.")
+    destino = destino_raw or "Sede / Uso Geral"
 
     if not descricao:
         raise ValueError("A descrição da despesa é obrigatória.")
@@ -1111,7 +1152,9 @@ def cadastrar_despesa(descricao: str, valor: float, data_compra: str, setor_id: 
     if not data_compra:
         raise ValueError("A data da compra é obrigatória.")
     if not setor_id:
-        raise ValueError("O setor é obrigatório.")
+        raise ValueError("O setor responsável é obrigatório.")
+    if not setor_destino_id:
+        setor_destino_id = setor_id
     if not fornecedor_id:
         raise ValueError("O fornecedor é obrigatório.")
     if not categoria_id:
@@ -1123,15 +1166,22 @@ def cadastrar_despesa(descricao: str, valor: float, data_compra: str, setor_id: 
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT COALESCE(realiza_compras, true) FROM setores WHERE id = %s;", (setor_id,))
+            row_setor = cur.fetchone()
+            if not row_setor:
+                raise ValueError("Setor responsável não encontrado.")
+            if not row_setor[0]:
+                raise ValueError("O setor selecionado não está habilitado para realizar compras.")
+
             om_id = _obter_ou_criar_orcamento_mensal_id(cur, ano, mes)
 
             cur.execute(
                 """
-                INSERT INTO despesas (descricao, valor, data_compra, setor_id, fornecedor_id, rubrica_id, destino, orcamento_mensal_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, descricao, valor, data_compra, setor_id, fornecedor_id, rubrica_id, destino;
+                INSERT INTO despesas (descricao, valor, data_compra, setor_id, setor_destino_id, fornecedor_id, rubrica_id, destino, orcamento_mensal_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, descricao, valor, data_compra, setor_id, setor_destino_id, fornecedor_id, rubrica_id, destino;
                 """,
-                (descricao, valor, dt, setor_id, fornecedor_id, categoria_id, destino, om_id)
+                (descricao, valor, dt, setor_id, setor_destino_id, fornecedor_id, categoria_id, destino, om_id)
             )
             row = cur.fetchone()
             conn.commit()
@@ -1142,19 +1192,24 @@ def cadastrar_despesa(descricao: str, valor: float, data_compra: str, setor_id: 
                 "valor": float(row[2]),
                 "data_compra": row[3].strftime("%Y-%m-%d"),
                 "setor_id": row[4],
-                "fornecedor_id": row[5],
-                "categoria_id": row[6],
-                "destino": row[7],
+                "setor_destino_id": row[5],
+                "fornecedor_id": row[6],
+                "categoria_id": row[7],
+                "destino": row[8],
                 "orcamento_mensal_id": om_id,
             }
 
 
-def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra: str, setor_id: int, fornecedor_id: int, categoria_id: int, destino: str = "") -> dict:
+def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra: str, setor_id: int, fornecedor_id: int, categoria_id: int, destino: str = "", setor_destino_id: int | None = None) -> dict:
     """
     Atualiza um lançamento de despesa existente.
     """
+    _garantir_coluna_setor_destino()
     descricao = (descricao or "").strip()
-    destino = (destino or "").strip() or "Sede / Uso Geral"
+    destino_raw = (destino or "").strip()
+    if len(destino_raw) > 500:
+        raise ValueError("O campo Destino / Finalidade deve ter no máximo 500 caracteres.")
+    destino = destino_raw or "Sede / Uso Geral"
 
     if not despesa_id:
         raise ValueError("ID da despesa inválido.")
@@ -1164,7 +1219,9 @@ def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra
     if not data_compra:
         raise ValueError("A data da compra é obrigatória.")
     if not setor_id:
-        raise ValueError("O setor é obrigatório.")
+        raise ValueError("O setor responsável é obrigatório.")
+    if not setor_destino_id:
+        setor_destino_id = setor_id
     if not fornecedor_id:
         raise ValueError("O fornecedor é obrigatório.")
     if not categoria_id:
@@ -1176,6 +1233,13 @@ def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT COALESCE(realiza_compras, true) FROM setores WHERE id = %s;", (setor_id,))
+            row_setor = cur.fetchone()
+            if not row_setor:
+                raise ValueError("Setor responsável não encontrado.")
+            if not row_setor[0]:
+                raise ValueError("O setor selecionado não está habilitado para realizar compras.")
+
             om_id = _obter_ou_criar_orcamento_mensal_id(cur, ano, mes)
 
             cur.execute(
@@ -1185,14 +1249,15 @@ def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra
                     valor = %s,
                     data_compra = %s,
                     setor_id = %s,
+                    setor_destino_id = %s,
                     fornecedor_id = %s,
                     rubrica_id = %s,
                     destino = %s,
                     orcamento_mensal_id = %s
                 WHERE id = %s
-                RETURNING id, descricao, valor, data_compra, setor_id, fornecedor_id, rubrica_id, destino;
+                RETURNING id, descricao, valor, data_compra, setor_id, setor_destino_id, fornecedor_id, rubrica_id, destino;
                 """,
-                (descricao, valor, dt, setor_id, fornecedor_id, categoria_id, destino, om_id, despesa_id)
+                (descricao, valor, dt, setor_id, setor_destino_id, fornecedor_id, categoria_id, destino, om_id, despesa_id)
             )
             row = cur.fetchone()
             if not row:
@@ -1205,9 +1270,10 @@ def atualizar_despesa(despesa_id: int, descricao: str, valor: float, data_compra
                 "valor": float(row[2]),
                 "data_compra": row[3].strftime("%Y-%m-%d"),
                 "setor_id": row[4],
-                "fornecedor_id": row[5],
-                "categoria_id": row[6],
-                "destino": row[7],
+                "setor_destino_id": row[5],
+                "fornecedor_id": row[6],
+                "categoria_id": row[7],
+                "destino": row[8],
                 "orcamento_mensal_id": om_id,
             }
 
@@ -1251,6 +1317,42 @@ PERMISSOES_PADRAO_USUARIO: dict[str, bool] = {
 
 _schema_permissoes_ok = False
 _schema_permissoes_lock = threading.Lock()
+
+_schema_setor_destino_ok = False
+_schema_setor_destino_lock = threading.Lock()
+
+
+def _garantir_coluna_setor_destino(conn_existente=None) -> None:
+    """Garante de forma transparente e idempotente as colunas 'setor_destino_id', 'destino' varchar(500) e 'realiza_compras' em setores."""
+    global _schema_setor_destino_ok
+    if _schema_setor_destino_ok:
+        return
+    with _schema_setor_destino_lock:
+        if _schema_setor_destino_ok:
+            return
+        sql_col = "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS setor_destino_id integer REFERENCES setores(id);"
+        sql_len = "ALTER TABLE despesas ALTER COLUMN destino TYPE varchar(500);"
+        sql_setor = "ALTER TABLE setores ADD COLUMN IF NOT EXISTS realiza_compras boolean NOT NULL DEFAULT true;"
+        try:
+            if conn_existente is not None:
+                if not conn_existente.autocommit:
+                    conn_existente.rollback()
+                with conn_existente.cursor() as cur_alt:
+                    cur_alt.execute(sql_col)
+                    cur_alt.execute(sql_len)
+                    cur_alt.execute(sql_setor)
+                if not conn_existente.autocommit:
+                    conn_existente.commit()
+            else:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(sql_col)
+                        cur.execute(sql_len)
+                        cur.execute(sql_setor)
+                        conn.commit()
+            _schema_setor_destino_ok = True
+        except Exception as e:
+            log.warning(f"Não foi possível verificar/atualizar colunas adicionais: {e}")
 
 
 def normalizar_permissoes(permissoes_raw: dict | str | None, tipo: str = "usuario") -> dict[str, bool]:

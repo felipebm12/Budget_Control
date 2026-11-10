@@ -465,12 +465,13 @@ def api_setores():
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
         descricao = (data.get("descricao") or "").strip()
+        realiza_compras = bool(data.get("realiza_compras", True))
 
         if not nome:
             return jsonify({"erro": "O nome do setor é obrigatório."}), 400
 
         try:
-            setor = database.cadastrar_setor(nome, descricao)
+            setor = database.cadastrar_setor(nome, descricao, realiza_compras=realiza_compras)
             return jsonify({"sucesso": True, "setor": setor}), 201
         except ValueError as ve:
             return jsonify({"erro": str(ve)}), 400
@@ -498,12 +499,13 @@ def api_setor_item(setor_id: int):
         data = request.get_json() or {}
         nome = (data.get("nome") or "").strip()
         descricao = (data.get("descricao") or "").strip()
+        realiza_compras = bool(data.get("realiza_compras", True))
 
         if not nome:
             return jsonify({"erro": "O nome do setor é obrigatório."}), 400
 
         try:
-            setor = database.atualizar_setor(setor_id, nome, descricao)
+            setor = database.atualizar_setor(setor_id, nome, descricao, realiza_compras=realiza_compras)
             return jsonify({"sucesso": True, "setor": setor})
         except ValueError as ve:
             return jsonify({"erro": str(ve)}), 400
@@ -679,6 +681,7 @@ def api_despesas():
         descricao = (data.get("descricao") or "").strip()
         data_compra = (data.get("data_compra") or "").strip()
         setor_id = data.get("setor_id")
+        setor_destino_id = data.get("setor_destino_id") or setor_id
         fornecedor_id = data.get("fornecedor_id")
         categoria_id = data.get("categoria_id") or data.get("rubrica_id")
         destino = (data.get("destino") or "").strip()
@@ -698,6 +701,8 @@ def api_despesas():
             return jsonify({"erro": "A data da compra é obrigatória."}), 400
         if not setor_id:
             return jsonify({"erro": "Selecione o setor responsável."}), 400
+        if not setor_destino_id:
+            return jsonify({"erro": "Selecione o setor de destino."}), 400
         if not fornecedor_id:
             return jsonify({"erro": "Selecione o fornecedor."}), 400
         if not categoria_id:
@@ -709,6 +714,7 @@ def api_despesas():
                 valor=valor,
                 data_compra=data_compra,
                 setor_id=int(setor_id),
+                setor_destino_id=int(setor_destino_id),
                 fornecedor_id=int(fornecedor_id),
                 categoria_id=int(categoria_id),
                 destino=destino
@@ -726,6 +732,7 @@ def api_despesas():
     data_fim = request.args.get("data_fim") or f"{ano_atual}-12-31"
 
     setor_id = request.args.get("setor_id", type=int) or None
+    setor_destino_id = request.args.get("setor_destino_id", type=int) or None
     fornecedor_id = request.args.get("fornecedor_id", type=int) or None
     categoria_id = request.args.get("categoria_id", type=int) or None
 
@@ -734,6 +741,7 @@ def api_despesas():
             data_inicio=data_inicio,
             data_fim=data_fim,
             setor_id=setor_id,
+            setor_destino_id=setor_destino_id,
             fornecedor_id=fornecedor_id,
             categoria_id=categoria_id
         )
@@ -742,6 +750,7 @@ def api_despesas():
             "data_inicio": data_inicio,
             "data_fim": data_fim,
             "setor_id": setor_id,
+            "setor_destino_id": setor_destino_id,
             "fornecedor_id": fornecedor_id,
             "categoria_id": categoria_id,
             "despesas": despesas,
@@ -767,6 +776,7 @@ def api_despesa_item(despesa_id: int):
         descricao = (data.get("descricao") or "").strip()
         data_compra = (data.get("data_compra") or "").strip()
         setor_id = data.get("setor_id")
+        setor_destino_id = data.get("setor_destino_id") or setor_id
         fornecedor_id = data.get("fornecedor_id")
         categoria_id = data.get("categoria_id") or data.get("rubrica_id")
         destino = (data.get("destino") or "").strip()
@@ -786,6 +796,8 @@ def api_despesa_item(despesa_id: int):
             return jsonify({"erro": "A data da compra é obrigatória."}), 400
         if not setor_id:
             return jsonify({"erro": "Selecione o setor responsável."}), 400
+        if not setor_destino_id:
+            return jsonify({"erro": "Selecione o setor de destino."}), 400
         if not fornecedor_id:
             return jsonify({"erro": "Selecione o fornecedor."}), 400
         if not categoria_id:
@@ -798,6 +810,7 @@ def api_despesa_item(despesa_id: int):
                 valor=valor,
                 data_compra=data_compra,
                 setor_id=int(setor_id),
+                setor_destino_id=int(setor_destino_id),
                 fornecedor_id=int(fornecedor_id),
                 categoria_id=int(categoria_id),
                 destino=destino,
@@ -1068,6 +1081,7 @@ def api_dados():
     data_fim = request.args.get("data_fim") or f"{ano_atual}-12-31"
 
     setor_id = request.args.get("setor_id", type=int) or None
+    setor_destino_id = request.args.get("setor_destino_id", type=int) or None
     fornecedor_id = request.args.get("fornecedor_id", type=int) or None
     categoria_id = request.args.get("categoria_id", type=int) or None
 
@@ -1076,6 +1090,7 @@ def api_dados():
             data_inicio=data_inicio,
             data_fim=data_fim,
             setor_id=setor_id,
+            setor_destino_id=setor_destino_id,
             fornecedor_id=fornecedor_id,
             categoria_id=categoria_id
         )
@@ -1114,6 +1129,7 @@ def api_exportar_pdf():
     visao = request.args.get("visao", "resumida").strip().lower()
 
     setor_id = request.args.get("setor_id", type=int) or None
+    setor_destino_id = request.args.get("setor_destino_id", type=int) or None
     fornecedor_id = request.args.get("fornecedor_id", type=int) or None
     categoria_id = request.args.get("categoria_id", type=int) or None
 
@@ -1134,6 +1150,7 @@ def api_exportar_pdf():
                 data_inicio=data_inicio,
                 data_fim=data_fim,
                 setor_id=setor_id,
+                setor_destino_id=setor_destino_id,
                 fornecedor_id=fornecedor_id,
                 categoria_id=categoria_id
             )
@@ -1153,6 +1170,7 @@ def api_exportar_pdf():
                 data_inicio=data_inicio,
                 data_fim=data_fim,
                 setor_id=setor_id,
+                setor_destino_id=setor_destino_id,
                 fornecedor_id=fornecedor_id,
                 categoria_id=categoria_id
             )
@@ -1202,6 +1220,7 @@ def api_exportar_csv():
     data_fim = request.args.get("data_fim") or f"{ano_atual}-12-31"
 
     setor_id = request.args.get("setor_id", type=int) or None
+    setor_destino_id = request.args.get("setor_destino_id", type=int) or None
     fornecedor_id = request.args.get("fornecedor_id", type=int) or None
     categoria_id = request.args.get("categoria_id", type=int) or None
 
@@ -1212,6 +1231,7 @@ def api_exportar_csv():
             data_inicio=data_inicio,
             data_fim=data_fim,
             setor_id=setor_id,
+            setor_destino_id=setor_destino_id,
             fornecedor_id=fornecedor_id,
             categoria_id=categoria_id,
         )
@@ -1223,10 +1243,11 @@ def api_exportar_csv():
             "ID",
             "Data da Compra",
             "Descrição",
-            "Setor",
+            "Setor Responsável",
+            "Setor de Destino",
             "Fornecedor",
             "Categoria",
-            "Destino",
+            "Destino / Finalidade",
             "Valor Numérico (R$)",
             "Valor Formatado",
         ])
@@ -1238,6 +1259,7 @@ def api_exportar_csv():
                 _sanitizar_celula_csv(d.get("data", "")),
                 _sanitizar_celula_csv(d.get("descricao", "")),
                 _sanitizar_celula_csv(d.get("setor", "")),
+                _sanitizar_celula_csv(d.get("setor_destino", d.get("setor", ""))),
                 _sanitizar_celula_csv(d.get("fornecedor", "")),
                 _sanitizar_celula_csv(d.get("categoria", "")),
                 _sanitizar_celula_csv(d.get("destino", "")),

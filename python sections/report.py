@@ -215,7 +215,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         doc.build(story)
         return destino
 
-    cabecalhos = ["Data", "Descrição", "Setor", "Fornecedor", "Categoria", "Destino", "Valor (R$)"]
+    cabecalhos = ["Data", "Descrição", "Setor Resp.", "Setor Dest.", "Fornecedor", "Categoria", "Destino", "Valor (R$)"]
     table_data = [[
         Paragraph(cabecalhos[0], s["cabecalho_centro"]),
         Paragraph(cabecalhos[1], s["cabecalho"]),
@@ -223,7 +223,8 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         Paragraph(cabecalhos[3], s["cabecalho"]),
         Paragraph(cabecalhos[4], s["cabecalho"]),
         Paragraph(cabecalhos[5], s["cabecalho"]),
-        Paragraph(cabecalhos[6], s["cabecalho_centro"]),
+        Paragraph(cabecalhos[6], s["cabecalho"]),
+        Paragraph(cabecalhos[7], s["cabecalho_centro"]),
     ]]
 
     for d in despesas:
@@ -231,6 +232,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
             Paragraph(_esc(d.get("data", "")), s["celula_centro"]),
             Paragraph(_esc(d.get("descricao", "")), s["celula"]),
             Paragraph(_esc(d.get("setor", "-")), s["celula"]),
+            Paragraph(_esc(d.get("setor_destino", d.get("setor", "-"))), s["celula"]),
             Paragraph(_esc(d.get("fornecedor", "-")), s["celula"]),
             Paragraph(_esc(d.get("categoria", "-")), s["celula"]),
             Paragraph(_esc(d.get("destino", "-")), s["celula"]),
@@ -241,6 +243,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
     table_data.append([
         Paragraph("TOTAL", s["celula_bold"]),
         Paragraph(f"{len(despesas)} despesa(s)", s["celula_bold"]),
+        Paragraph("", s["celula"]),
         Paragraph("", s["celula"]),
         Paragraph("", s["celula"]),
         Paragraph("", s["celula"]),
@@ -265,7 +268,7 @@ def gerar_pdf_detalhado(despesas: list, periodo_texto: str = "Geral", total_gast
         if i % 2 == 0:
             comandos.append(("BACKGROUND", (0, i), (-1, i), COR_ZEBRA))
 
-    tabela = Table(table_data, colWidths=[58, 175, 95, 110, 95, 95, 84], repeatRows=1)
+    tabela = Table(table_data, colWidths=[55, 140, 82, 82, 95, 85, 89, 84], repeatRows=1)
     tabela.setStyle(TableStyle(comandos))
 
     story.append(Spacer(1, 4))
