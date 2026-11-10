@@ -903,7 +903,7 @@
       </div>
       <div class="modal-body">
         <div class="gestao-top-bar">
-          <input type="text" id="busca-usuario-modal" class="busca-input" placeholder="Filtrar usuários por login ou nome..." />
+          <input type="text" id="busca-usuario-modal" class="busca-input" placeholder="Filtrar usuários por login, nome ou e-mail..." />
           <button type="button" class="btn btn-primario" id="btn-abrir-novo-usuario">
             + Novo Usuário
           </button>
@@ -915,6 +915,7 @@
               <tr>
                 <th>Login</th>
                 <th>Nome Completo</th>
+                <th>E-mail</th>
                 <th style="text-align:center;">Perfil</th>
                 <th style="text-align:center;">Permissões</th>
                 <th style="text-align:center;">Status</th>
@@ -3635,7 +3636,7 @@
       tbody.innerHTML = "";
 
       if (!usuarios || usuarios.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum usuário encontrado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--cinza-600)">Nenhum usuário encontrado.</td></tr>`;
         return;
       }
 
@@ -3684,9 +3685,14 @@
                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
              </button>`;
 
+        const emailExibicao = u.email
+          ? `<span style="font-size:0.82rem; color:var(--cinza-700);">${escapeHtml(u.email)}</span>`
+          : `<span style="font-size:0.76rem; color:#d97706; font-style:italic;" title="Edite o usuário para cadastrar um e-mail de recuperação">Sem e-mail</span>`;
+
         tr.innerHTML = `
           <td class="td-destaque" style="font-family:monospace; font-size:0.86rem;">${escapeHtml(u.username)}</td>
           <td>${escapeHtml(u.nome_completo || "-")}</td>
+          <td>${emailExibicao}</td>
           <td style="text-align:center;">${badgePerfil}</td>
           <td style="text-align:center;">${badgePermissoes}</td>
           <td style="text-align:center;">${badgeStatus}</td>
@@ -3696,7 +3702,7 @@
             <button type="button" class="btn-icone btn-icone-edit" title="Editar dados e permissões do usuário" onclick="editarUsuario(${Number(u.id)}, '${escapeJsAttr(u.nome_completo)}', '${escapeJsAttr(u.tipo)}', ${Boolean(u.ativo)})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button type="button" class="btn-icone btn-icone-key" title="Redefinir senha deste usuário" onclick="redefinirSenhaUsuario(${Number(u.id)}, '${escapeJsAttr(u.username)}')">
+            <button type="button" class="btn-icone btn-icone-key" title="Redefinir senha ou enviar link de recuperação por e-mail" onclick="redefinirSenhaUsuario(${Number(u.id)}, '${escapeJsAttr(u.username)}')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-1.5 1.5L14 9l-1.5-1.5L10 10l1.5 1.5L9 14l-1.5-1.5L5 15l2 2-3 3 1 1 3-3 2 2 1-1-1.5-1.5L10 14l1.5 1.5L14 13l-1.5-1.5L15 9l2 2 4-4-2-2z"/></svg>
             </button>
             ${btnExcluir}
@@ -3764,7 +3770,10 @@
       inputBuscaUsuario.addEventListener("input", (e) => {
         const termo = e.target.value.toLowerCase().trim();
         const filtrados = (estado.usuarios || []).filter(
-          (u) => u.username.toLowerCase().includes(termo) || (u.nome_completo || "").toLowerCase().includes(termo)
+          (u) =>
+            u.username.toLowerCase().includes(termo) ||
+            (u.nome_completo || "").toLowerCase().includes(termo) ||
+            (u.email || "").toLowerCase().includes(termo)
         );
         renderTabelaUsuariosGestao(filtrados);
       });
@@ -3794,12 +3803,18 @@
                   <input id="swal-novo-user-nome" class="swal2-input" placeholder="Ex: João da Silva" style="margin:0; width:100%; box-sizing:border-box;">
                 </div>
               </div>
-              <div>
-                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Perfil de Acesso *</label>
-                <select id="swal-novo-user-tipo" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
-                  <option value="usuario">Usuário Padrão (Permissões Personalizáveis)</option>
-                  <option value="admin">Administrador (Acesso Total)</option>
-                </select>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">E-mail (para recuperação) *</label>
+                  <input id="swal-novo-user-email" type="email" class="swal2-input" autocomplete="off" placeholder="Ex: joao@empresa.com" style="margin:0; width:100%; box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Perfil de Acesso *</label>
+                  <select id="swal-novo-user-tipo" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box; padding:0.5rem; height:42px;">
+                    <option value="usuario">Usuário Padrão (Permissões Personalizáveis)</option>
+                    <option value="admin">Administrador (Acesso Total)</option>
+                  </select>
+                </div>
               </div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
                 <div>
@@ -3847,6 +3862,7 @@
           preConfirm: () => {
             const username = (document.getElementById("swal-novo-user-login")?.value || "").trim().toLowerCase();
             const nomeCompleto = (document.getElementById("swal-novo-user-nome")?.value || "").trim();
+            const email = (document.getElementById("swal-novo-user-email")?.value || "").trim().toLowerCase();
             const tipo = document.getElementById("swal-novo-user-tipo")?.value || "usuario";
             const senha = document.getElementById("swal-novo-user-senha")?.value || "";
             const confirmar = document.getElementById("swal-novo-user-confirmar")?.value || "";
@@ -3868,6 +3884,10 @@
               Swal.showValidationMessage("O nome completo é obrigatório.");
               return false;
             }
+            if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+              Swal.showValidationMessage("Informe um endereço de e-mail válido.");
+              return false;
+            }
             if (!senha || senha.length < 8) {
               Swal.showValidationMessage("A senha deve ter no mínimo 8 caracteres.");
               return false;
@@ -3876,7 +3896,7 @@
               Swal.showValidationMessage("A senha e a confirmação não conferem.");
               return false;
             }
-            return { username, nome_completo: nomeCompleto, tipo, senha, permissoes };
+            return { username, nome_completo: nomeCompleto, email, tipo, senha, permissoes };
           }
         });
 
@@ -3905,6 +3925,7 @@
       const ehProprio = CURRENT_USER_ID !== null && id === CURRENT_USER_ID;
       const uObj = (estado.usuarios || []).find((x) => x.id === id);
       const permsAtuais = uObj ? uObj.permissoes : null;
+      const emailAtual = uObj && uObj.email ? uObj.email : "";
       const avisoProprio = ehProprio
         ? `<div style="padding:0.5rem; background:#eff6ff; border-radius:6px; font-size:0.75rem; color:#1e40af; margin-bottom:0.5rem;">
              Você está editando sua própria conta logada. Por segurança, o perfil e o status não podem ser alterados nesta tela.
@@ -3917,9 +3938,15 @@
         html: `
           <div style="text-align:left; display:flex; flex-direction:column; gap:0.65rem;">
             ${avisoProprio}
-            <div>
-              <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
-              <input id="swal-edit-user-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nome Completo *</label>
+                <input id="swal-edit-user-nome" class="swal2-input" value="${escapeHtml(nomeAtual)}" style="margin:0; width:100%; box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">E-mail (para recuperação) *</label>
+                <input id="swal-edit-user-email" type="email" class="swal2-input" value="${escapeHtml(emailAtual)}" placeholder="Ex: usuario@empresa.com" style="margin:0; width:100%; box-sizing:border-box;">
+              </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
               <div>
@@ -3950,6 +3977,7 @@
         confirmButtonColor: "var(--primaria)",
         preConfirm: () => {
           const nomeCompleto = (document.getElementById("swal-edit-user-nome")?.value || "").trim();
+          const email = (document.getElementById("swal-edit-user-email")?.value || "").trim().toLowerCase();
           const tipo = ehProprio ? tipoAtual : document.getElementById("swal-edit-user-tipo")?.value || "usuario";
           const ativo = ehProprio ? true : document.getElementById("swal-edit-user-status")?.value === "true";
           const permissoes = coletarPermissoesDoPainel("swal-edit-user");
@@ -3958,7 +3986,11 @@
             Swal.showValidationMessage("O nome completo é obrigatório.");
             return false;
           }
-          return { nome_completo: nomeCompleto, tipo, ativo, permissoes };
+          if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            Swal.showValidationMessage("Informe um endereço de e-mail válido.");
+            return false;
+          }
+          return { nome_completo: nomeCompleto, email, tipo, ativo, permissoes };
         }
       });
 
@@ -3982,13 +4014,50 @@
       }
     }
 
+    async function enviarLinkResetPorEmailAdmin(id, email) {
+      try {
+        Swal.fire({
+          title: "Enviando link...",
+          text: `Disparando e-mail para ${email}`,
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading(),
+        });
+        const res = await fetch(`/api/usuarios/${id}/enviar-link-reset`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.sucesso) {
+          Swal.fire({ icon: "success", title: "Link Enviado!", text: data.mensagem, confirmButtonColor: "var(--primaria)" });
+        } else {
+          Swal.fire({ icon: "error", title: "Erro", text: data.erro || "Não foi possível enviar o link." });
+        }
+      } catch (err) {
+        Swal.fire({ icon: "error", title: "Erro", text: err.message });
+      }
+    }
+
     async function redefinirSenhaUsuario(id, username) {
+      const uObj = (estado.usuarios || []).find((x) => x.id === id);
+      const emailUser = uObj && uObj.email ? uObj.email : "";
+      const blocoEmailLink = emailUser
+        ? `<div style="padding:0.65rem 0.75rem; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+             <div style="font-size:0.78rem; color:#1e3a8a; line-height:1.35;">
+               <strong>Magic Link por E-mail:</strong><br>${escapeHtml(emailUser)}
+             </div>
+             <button type="button" id="btn-disparar-link-email" class="btn btn-primario" style="font-size:0.75rem; padding:0.4rem 0.7rem; white-space:nowrap;">
+               Enviar Link
+             </button>
+           </div>`
+        : `<div style="padding:0.55rem 0.75rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:0.76rem; color:#92400e;">
+             Este usuário ainda não possui e-mail cadastrado para receber link de recuperação.
+           </div>`;
+
       const { value: formValues } = await Swal.fire({
         title: "Redefinir Senha",
         html: `
           <div style="text-align:left; display:flex; flex-direction:column; gap:0.75rem;">
+            ${blocoEmailLink}
+            <hr style="border:none; border-top:1px solid var(--cinza-200); margin:0.15rem 0;" />
             <p style="font-size:0.82rem; color:var(--cinza-600); margin:0;">
-              Defina a nova senha para o usuário <strong>"${escapeHtml(username)}"</strong>:
+              Ou defina manualmente uma nova senha para <strong>"${escapeHtml(username)}"</strong>:
             </p>
             <div>
               <label style="font-size:0.8rem; font-weight:600; color:var(--cinza-700); display:block; margin-bottom:0.25rem;">Nova Senha (mínimo 8 caracteres) *</label>
@@ -4000,9 +4069,18 @@
             </div>
           </div>
         `,
+        didOpen: () => {
+          const btnEmail = document.getElementById("btn-disparar-link-email");
+          if (btnEmail) {
+            btnEmail.addEventListener("click", () => {
+              Swal.close();
+              enviarLinkResetPorEmailAdmin(id, emailUser);
+            });
+          }
+        },
         focusConfirm: false,
         showCancelButton: true,
-        confirmButtonText: "Redefinir Senha",
+        confirmButtonText: "Salvar Senha Manual",
         cancelButtonText: "Cancelar",
         confirmButtonColor: "#f59e0b",
         preConfirm: () => {

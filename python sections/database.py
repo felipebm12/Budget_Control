@@ -1,12 +1,15 @@
 import calendar
 from contextlib import contextmanager
+import hashlib
 import json
 import logging
 import math
 import os
+import re
+import secrets
 import threading
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 import psycopg2
 from psycopg2 import extensions as _pg_ext
@@ -1383,31 +1386,65 @@ def normalizar_permissoes(permissoes_raw: dict | str | None, tipo: str = "usuari
     return resultado
 
 
+_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validar_email(email_raw: str | None, obrigatorio: bool = True) -> str:
+    """Valida e normaliza um endereço de e-mail."""
+    email = (email_raw or "").strip().lower()
+    if not email:
+        if obrigatorio:
+            raise ValueError("O endereço de e-mail é obrigatório.")
+        return ""
+    if len(email) > 255 or not _EMAIL_REGEX.match(email):
+        raise ValueError("Informe um endereço de e-mail válido (ex: nome@empresa.com).")
+    return email
+
+
 def _garantir_coluna_permissoes(conn_existente=None) -> None:
-    """Garante de forma transparente e idempotente que a coluna 'permissoes' exista na tabela 'usuarios'."""
+    """Garante de forma transparente e idempotente que as colunas 'permissoes', 'email' e a tabela 'tokens_recuperacao_senha' existam."""
     global _schema_permissoes_ok
     if _schema_permissoes_ok:
         return
     with _schema_permissoes_lock:
         if _schema_permissoes_ok:
             return
-        sql = "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes jsonb NOT NULL DEFAULT '{}'::jsonb;"
+        sqls = [
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permissoes jsonb NOT NULL DEFAULT '{}'::jsonb;",
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email varchar(255);",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email_unique ON usuarios (LOWER(email)) WHERE email IS NOT NULL AND email <> '';",
+            """
+            CREATE TABLE IF NOT EXISTS tokens_recuperacao_senha (
+                id              integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                usuario_id      integer NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                token_hash      varchar(64) NOT NULL UNIQUE,
+                expira_em       timestamptz NOT NULL,
+                usado_em        timestamptz,
+                ip_solicitante  varchar(64),
+                criado_em       timestamptz NOT NULL DEFAULT now()
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_tokens_recuperacao_hash ON tokens_recuperacao_senha (token_hash);",
+            "CREATE INDEX IF NOT EXISTS idx_tokens_recuperacao_usuario ON tokens_recuperacao_senha (usuario_id);",
+        ]
         try:
             if conn_existente is not None:
                 if not conn_existente.autocommit:
                     conn_existente.rollback()
                 with conn_existente.cursor() as cur_alt:
-                    cur_alt.execute(sql)
+                    for s in sqls:
+                        cur_alt.execute(s)
                 if not conn_existente.autocommit:
                     conn_existente.commit()
             else:
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
-                        cur.execute(sql)
+                        for s in sqls:
+                            cur.execute(s)
                         conn.commit()
             _schema_permissoes_ok = True
         except Exception as e:
-            log.warning(f"Não foi possível verificar/criar coluna 'permissoes' em usuarios: {e}")
+            log.warning(f"Não foi possível verificar/criar schema de permissões/e-mail/tokens em usuarios: {e}")
 
 
 def buscar_usuario_por_username(username: str) -> dict | None:
@@ -1420,7 +1457,7 @@ def buscar_usuario_por_username(username: str) -> dict | None:
     if not username:
         return None
     query = """
-        SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb)
+        SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '')
         FROM usuarios
         WHERE LOWER(username) = LOWER(%s) AND ativo = true
         LIMIT 1;
@@ -1446,6 +1483,7 @@ def buscar_usuario_por_username(username: str) -> dict | None:
                     "tipo": tipo,
                     "ativo": row[5],
                     "permissoes": normalizar_permissoes(row[6], tipo),
+                    "email": row[7] or "",
                 }
                 with _user_cache_lock:
                     _user_cache[int(row[0])] = (time.monotonic(), dados)
@@ -1474,7 +1512,7 @@ def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
             return copia
 
     query = """
-        SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb)
+        SELECT id, username, senha_hash, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '')
         FROM usuarios
         WHERE id = %s AND ativo = true
         LIMIT 1;
@@ -1501,6 +1539,7 @@ def buscar_usuario_por_username_por_id(user_id: int) -> dict | None:
                     "tipo": tipo,
                     "ativo": row[5],
                     "permissoes": normalizar_permissoes(row[6], tipo),
+                    "email": row[7] or "",
                 }
                 with _user_cache_lock:
                     _user_cache[uid] = (time.monotonic(), dados)
@@ -1560,7 +1599,8 @@ def atualizar_ultimo_acesso_async(user_id: int) -> None:
 
 
 def trocar_senha(user_id: int, nova_senha: str) -> None:
-    """Gera novo hash bcrypt e atualiza a senha do usuário no banco."""
+    """Gera novo hash bcrypt, atualiza a senha do usuário no banco e invalida tokens pendentes."""
+    _garantir_coluna_permissoes()
     novo_hash = _hash_senha(nova_senha)
     try:
         with get_db_connection() as conn:
@@ -1568,6 +1608,10 @@ def trocar_senha(user_id: int, nova_senha: str) -> None:
                 cur.execute(
                     "UPDATE usuarios SET senha_hash = %s WHERE id = %s;",
                     (novo_hash, user_id)
+                )
+                cur.execute(
+                    "UPDATE tokens_recuperacao_senha SET usado_em = now() WHERE usuario_id = %s AND usado_em IS NULL;",
+                    (user_id,),
                 )
                 conn.commit()
         invalidar_cache_usuario(user_id)
@@ -1612,10 +1656,11 @@ def redefinir_senha_por_username(username: str, nova_senha: str) -> dict:
 
 
 def buscar_usuarios() -> list[dict]:
-    """Retorna a lista de usuários cadastrados (sem o hash de senha), incluindo suas permissões."""
+    """Retorna a lista de usuários cadastrados (sem o hash de senha), incluindo e-mail e permissões."""
     _garantir_coluna_permissoes()
     query = """
-        SELECT id, username, nome_completo, tipo, ativo, criado_em, ultimo_acesso, COALESCE(permissoes, '{}'::jsonb)
+        SELECT id, username, nome_completo, tipo, ativo, criado_em, ultimo_acesso,
+               COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '')
         FROM usuarios
         ORDER BY nome_completo ASC, username ASC;
     """
@@ -1634,6 +1679,7 @@ def buscar_usuarios() -> list[dict]:
                         "criado_em": r[5].strftime("%d/%m/%Y %H:%M") if r[5] else "",
                         "ultimo_acesso": r[6].strftime("%d/%m/%Y %H:%M") if r[6] else "Nunca acessou",
                         "permissoes": normalizar_permissoes(r[7], r[3]),
+                        "email": r[8] or "",
                     }
                     for r in rows
                 ]
@@ -1648,13 +1694,14 @@ def cadastrar_usuario(
     nome_completo: str,
     tipo: str = "usuario",
     permissoes: dict | None = None,
+    email: str | None = None,
 ) -> dict:
-    """Cadastra um novo usuário no banco com senha criptografada via bcrypt e permissões granulares."""
-    import re
+    """Cadastra um novo usuário no banco com e-mail obrigatório, senha bcrypt e permissões granulares."""
     _garantir_coluna_permissoes()
     username = (username or "").strip().lower()
     nome_completo = (nome_completo or "").strip()
     tipo = (tipo or "usuario").strip().lower()
+    email_norm = _validar_email(email, obrigatorio=True)
 
     if not username or len(username) < 3:
         raise ValueError("O login deve ter pelo menos 3 caracteres.")
@@ -1669,14 +1716,21 @@ def cadastrar_usuario(
     perms_norm = normalizar_permissoes(permissoes, tipo)
 
     query = """
-        INSERT INTO usuarios (username, senha_hash, nome_completo, tipo, ativo, permissoes)
-        VALUES (%s, %s, %s, %s, true, %s::jsonb)
-        RETURNING id, username, nome_completo, tipo, ativo, criado_em, COALESCE(permissoes, '{}'::jsonb);
+        INSERT INTO usuarios (username, email, senha_hash, nome_completo, tipo, ativo, permissoes)
+        VALUES (%s, %s, %s, %s, %s, true, %s::jsonb)
+        RETURNING id, username, nome_completo, tipo, ativo, criado_em, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '');
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (username, novo_hash, nome_completo, tipo, json.dumps(perms_norm)))
+                cur.execute(
+                    "SELECT 1 FROM usuarios WHERE LOWER(email) = LOWER(%s) LIMIT 1;",
+                    (email_norm,),
+                )
+                if cur.fetchone():
+                    raise ValueError(f"O e-mail '{email_norm}' já está vinculado a outro usuário.")
+
+                cur.execute(query, (username, email_norm, novo_hash, nome_completo, tipo, json.dumps(perms_norm)))
                 r = cur.fetchone()
                 conn.commit()
                 return {
@@ -1688,8 +1742,14 @@ def cadastrar_usuario(
                     "criado_em": r[5].strftime("%d/%m/%Y %H:%M") if r[5] else "",
                     "ultimo_acesso": "Nunca acessou",
                     "permissoes": normalizar_permissoes(r[6], r[3]),
+                    "email": r[7] or "",
                 }
-    except psycopg2.IntegrityError:
+    except ValueError:
+        raise
+    except psycopg2.IntegrityError as ie:
+        err_msg = str(ie).lower()
+        if "email" in err_msg:
+            raise ValueError(f"O e-mail '{email_norm}' já está em uso por outro usuário.")
         raise ValueError(f"O nome de usuário '{username}' já está em uso.")
     except Exception as e:
         log.error(f"Erro ao cadastrar usuário: {e}")
@@ -1703,8 +1763,9 @@ def atualizar_usuario(
     ativo: bool,
     current_user_id: int,
     permissoes: dict | None = None,
+    email: str | None = None,
 ) -> dict:
-    """Atualiza dados do usuário (nome, perfil, status ativo/inativo e opcionalmente permissões)."""
+    """Atualiza dados do usuário (nome, e-mail, perfil, status ativo/inativo e opcionalmente permissões)."""
     _garantir_coluna_permissoes()
     nome_completo = (nome_completo or "").strip()
     tipo = (tipo or "usuario").strip().lower()
@@ -1713,6 +1774,8 @@ def atualizar_usuario(
         raise ValueError("O nome completo é obrigatório.")
     if tipo not in ("admin", "usuario"):
         raise ValueError("Perfil inválido. Escolha 'admin' ou 'usuario'.")
+
+    email_norm = _validar_email(email, obrigatorio=True) if email is not None else None
 
     # Proteção: usuário logado não pode desativar a si mesmo nem remover seu perfil admin
     if user_id == current_user_id:
@@ -1725,12 +1788,21 @@ def atualizar_usuario(
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT tipo, ativo, COALESCE(permissoes, '{}'::jsonb) FROM usuarios WHERE id = %s;",
+                    "SELECT tipo, ativo, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '') FROM usuarios WHERE id = %s;",
                     (user_id,),
                 )
                 user_atual = cur.fetchone()
                 if not user_atual:
                     raise ValueError("Usuário não encontrado.")
+
+                email_final = email_norm if email_norm is not None else (user_atual[3] or "")
+                if email_final:
+                    cur.execute(
+                        "SELECT 1 FROM usuarios WHERE LOWER(email) = LOWER(%s) AND id != %s LIMIT 1;",
+                        (email_final, user_id),
+                    )
+                    if cur.fetchone():
+                        raise ValueError(f"O e-mail '{email_final}' já está vinculado a outro usuário.")
 
                 # Se estiver desativando ou rebaixando um admin, garantir que ainda haja pelo menos 1 admin ativo
                 if (not ativo or tipo != "admin") and user_atual[0] == "admin" and user_atual[1]:
@@ -1751,13 +1823,14 @@ def atualizar_usuario(
                     """
                     UPDATE usuarios
                     SET nome_completo = %s,
+                        email = %s,
                         tipo = %s,
                         ativo = %s,
                         permissoes = %s::jsonb
                     WHERE id = %s
-                    RETURNING id, username, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb);
+                    RETURNING id, username, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '');
                     """,
-                    (nome_completo, tipo, ativo, json.dumps(perms_norm), user_id),
+                    (nome_completo, email_final or None, tipo, ativo, json.dumps(perms_norm), user_id),
                 )
                 r = cur.fetchone()
                 conn.commit()
@@ -1769,9 +1842,12 @@ def atualizar_usuario(
                     "tipo": r[3],
                     "ativo": r[4],
                     "permissoes": normalizar_permissoes(r[5], r[3]),
+                    "email": r[6] or "",
                 }
     except ValueError:
         raise
+    except psycopg2.IntegrityError:
+        raise ValueError("O endereço de e-mail informado já está em uso por outro usuário.")
     except Exception as e:
         log.error(f"Erro ao atualizar usuário ID={user_id}: {e}")
         raise
@@ -1800,7 +1876,7 @@ def atualizar_permissoes_usuario(user_id: int, permissoes: dict) -> dict:
                     UPDATE usuarios
                     SET permissoes = %s::jsonb
                     WHERE id = %s
-                    RETURNING id, username, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb);
+                    RETURNING id, username, nome_completo, tipo, ativo, COALESCE(permissoes, '{}'::jsonb), COALESCE(email, '');
                     """,
                     (json.dumps(perms_norm), user_id),
                 )
@@ -1814,6 +1890,7 @@ def atualizar_permissoes_usuario(user_id: int, permissoes: dict) -> dict:
                     "tipo": r[3],
                     "ativo": r[4],
                     "permissoes": normalizar_permissoes(r[5], r[3]),
+                    "email": r[6] or "",
                 }
     except ValueError:
         raise
@@ -1823,7 +1900,8 @@ def atualizar_permissoes_usuario(user_id: int, permissoes: dict) -> dict:
 
 
 def redefinir_senha_usuario_por_id(user_id: int, nova_senha: str) -> dict:
-    """Redefine a senha de um usuário pelo seu ID."""
+    """Redefine a senha de um usuário pelo seu ID e invalida tokens de recuperação pendentes."""
+    _garantir_coluna_permissoes()
     novo_hash = _hash_senha(nova_senha)
     try:
         with get_db_connection() as conn:
@@ -1835,6 +1913,10 @@ def redefinir_senha_usuario_por_id(user_id: int, nova_senha: str) -> dict:
                 r = cur.fetchone()
                 if not r:
                     raise ValueError("Usuário não encontrado.")
+                cur.execute(
+                    "UPDATE tokens_recuperacao_senha SET usado_em = now() WHERE usuario_id = %s AND usado_em IS NULL;",
+                    (user_id,),
+                )
                 conn.commit()
                 invalidar_cache_usuario(user_id)
                 return {"id": r[0], "username": r[1], "tipo": r[2]}
@@ -1842,6 +1924,201 @@ def redefinir_senha_usuario_por_id(user_id: int, nova_senha: str) -> dict:
         raise
     except Exception as e:
         log.error(f"Erro ao redefinir senha do usuário ID={user_id}: {e}")
+        raise
+
+
+# ── Recuperação de Senha por Link de E-mail (Token Temporário de Uso Único) ──
+
+def _hash_token_recuperacao(token_raw: str) -> str:
+    """Gera o hash SHA-256 hexadecimal do token de recuperação para armazenamento seguro no banco."""
+    return hashlib.sha256((token_raw or "").strip().encode("utf-8")).hexdigest()
+
+
+def criar_token_recuperacao_senha(
+    identificador: str,
+    ip_solicitante: str = "",
+    minutos_validade: int = 30,
+) -> dict | None:
+    """
+    Busca um usuário ativo por e-mail ou username e gera um token criptográfico de uso único.
+    Armazena apenas o hash SHA-256 do token no banco e invalida tokens anteriores não utilizados.
+    Retorna None caso o usuário não exista, esteja inativo ou não possua e-mail cadastrado.
+    """
+    _garantir_coluna_permissoes()
+    identificador = (identificador or "").strip()
+    if not identificador:
+        return None
+
+    minutos = max(5, min(int(minutos_validade or 30), 1440))
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, username, nome_completo, COALESCE(email, '')
+                    FROM usuarios
+                    WHERE ativo = true
+                      AND (LOWER(email) = LOWER(%s) OR LOWER(username) = LOWER(%s))
+                    LIMIT 1;
+                    """,
+                    (identificador, identificador),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+
+                user_id, username, nome_completo, email = row[0], row[1], row[2], (row[3] or "").strip()
+                if not email:
+                    log.warning(
+                        f"Solicitação de recuperação de senha para '{username}' ignorada: usuário sem e-mail cadastrado."
+                    )
+                    return None
+
+                token_raw = secrets.token_urlsafe(32)
+                token_hash = _hash_token_recuperacao(token_raw)
+
+                # Invalida eventuais tokens anteriores ainda abertos deste usuário e limpa expirados antigos
+                cur.execute(
+                    """
+                    UPDATE tokens_recuperacao_senha
+                       SET usado_em = now()
+                     WHERE usuario_id = %s AND usado_em IS NULL;
+                    """,
+                    (user_id,),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM tokens_recuperacao_senha
+                     WHERE expira_em < (now() - interval '7 days');
+                    """
+                )
+                cur.execute(
+                    """
+                    INSERT INTO tokens_recuperacao_senha (usuario_id, token_hash, expira_em, ip_solicitante)
+                    VALUES (%s, %s, now() + (%s * interval '1 minute'), %s);
+                    """,
+                    (user_id, token_hash, minutos, (ip_solicitante or "")[:64]),
+                )
+                conn.commit()
+                return {
+                    "token": token_raw,
+                    "usuario_id": user_id,
+                    "username": username,
+                    "nome_completo": nome_completo or username,
+                    "email": email,
+                    "expira_minutos": minutos,
+                }
+    except Exception as e:
+        log.error(f"Erro ao criar token de recuperação de senha: {e}")
+        return None
+
+
+def validar_token_recuperacao_senha(token_raw: str) -> dict | None:
+    """
+    Verifica se o token existe, pertence a um usuário ativo, não foi utilizado e não expirou.
+    Retorna os dados básicos do usuário ou None se inválido/expirado.
+    """
+    _garantir_coluna_permissoes()
+    token_raw = (token_raw or "").strip()
+    if not token_raw or len(token_raw) < 16:
+        return None
+
+    token_hash = _hash_token_recuperacao(token_raw)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT t.id, u.id, u.username, u.nome_completo, COALESCE(u.email, '')
+                    FROM tokens_recuperacao_senha t
+                    JOIN usuarios u ON u.id = t.usuario_id
+                    WHERE t.token_hash = %s
+                      AND t.usado_em IS NULL
+                      AND t.expira_em > now()
+                      AND u.ativo = true
+                    LIMIT 1;
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "token_id": row[0],
+                    "usuario_id": row[1],
+                    "username": row[2],
+                    "nome_completo": row[3] or row[2],
+                    "email": row[4] or "",
+                }
+    except Exception as e:
+        log.error(f"Erro ao validar token de recuperação de senha: {e}")
+        return None
+
+
+def consumir_token_e_redefinir_senha(token_raw: str, nova_senha: str) -> dict:
+    """
+    Consome atomicamente o token de uso único e atualiza a senha do usuário.
+    Lança ValueError se o token for inválido/expirado ou se a nova senha não atender aos requisitos.
+    """
+    _garantir_coluna_permissoes()
+    token_raw = (token_raw or "").strip()
+    if not token_raw or len(token_raw) < 16:
+        raise ValueError("Link de recuperação inválido ou expirado.")
+
+    novo_hash = _hash_senha(nova_senha)
+    token_hash = _hash_token_recuperacao(token_raw)
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT t.id, u.id, u.username, u.email
+                    FROM tokens_recuperacao_senha t
+                    JOIN usuarios u ON u.id = t.usuario_id
+                    WHERE t.token_hash = %s
+                      AND t.usado_em IS NULL
+                      AND t.expira_em > now()
+                      AND u.ativo = true
+                    FOR UPDATE OF t
+                    LIMIT 1;
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise ValueError("Este link de redefinição é inválido, já foi utilizado ou expirou. Solicite um novo link.")
+
+                token_id, user_id, username, email = row[0], row[1], row[2], row[3] or ""
+
+                cur.execute(
+                    """
+                    UPDATE tokens_recuperacao_senha
+                       SET usado_em = now()
+                     WHERE usuario_id = %s AND usado_em IS NULL;
+                    """,
+                    (user_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE usuarios
+                       SET senha_hash = %s
+                     WHERE id = %s;
+                    """,
+                    (novo_hash, user_id),
+                )
+                conn.commit()
+                invalidar_cache_usuario(user_id)
+                return {
+                    "usuario_id": user_id,
+                    "username": username,
+                    "email": email,
+                    "token_id": token_id,
+                }
+    except ValueError:
+        raise
+    except Exception as e:
+        log.error(f"Erro ao consumir token de recuperação de senha: {e}")
         raise
 
 

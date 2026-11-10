@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recuperação de Senha — Controle de Despesas</title>
+  <link rel="icon" type="image/png" href="{{ url_for('favicon') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <style>
+    body.login-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--primaria);
+      padding: 1rem;
+    }
+
+    .login-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0,0,0,0.2);
+      padding: 2.6rem 2.4rem 2.1rem;
+      width: 100%;
+      max-width: 430px;
+      animation: fadeInUp 0.35s ease;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.4rem;
+    }
+
+    .login-brand-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--primaria);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      flex-shrink: 0;
+    }
+
+    .login-brand-texto h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--primaria);
+      line-height: 1.15;
+    }
+
+    .login-brand-texto p {
+      font-size: 0.78rem;
+      color: var(--cinza-400);
+      margin-top: 2px;
+    }
+
+    .reset-descricao {
+      font-size: 0.85rem;
+      color: var(--cinza-600);
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+
+    .login-form-grupo {
+      margin-bottom: 1.1rem;
+    }
+
+    .login-form-grupo label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--cinza-700);
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.02em;
+    }
+
+    .login-input-wrap {
+      position: relative;
+    }
+
+    .login-input-wrap input {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      border: 1.5px solid var(--cinza-200);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: var(--cinza-800);
+      background: var(--cinza-50);
+      outline: none;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      box-sizing: border-box;
+    }
+
+    .login-input-wrap input:focus {
+      border-color: var(--primaria);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(5, 3, 0, 0.1);
+    }
+
+    .login-erro {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      background: var(--vermelho-bg);
+      color: var(--vermelho);
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.84rem;
+      font-weight: 500;
+      margin-bottom: 1.1rem;
+      line-height: 1.45;
+    }
+
+    .login-sucesso {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #6ee7b7;
+      border-radius: 8px;
+      padding: 0.75rem 0.9rem;
+      font-size: 0.84rem;
+      font-weight: 500;
+      margin-bottom: 1.2rem;
+      line-height: 1.5;
+    }
+
+    .login-erro svg,
+    .login-sucesso svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--primaria);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.18s, transform 0.1s;
+      margin-top: 0.3rem;
+      display: inline-block;
+      text-align: center;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
+
+    .btn-login:hover {
+      background: var(--primaria-hover);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 1.35rem;
+      font-size: 0.8rem;
+      color: var(--cinza-500);
+    }
+
+    .login-footer a {
+      color: var(--primaria);
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .login-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .user-chip {
+      background: var(--cinza-100);
+      border: 1px solid var(--cinza-200);
+      border-radius: 8px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.82rem;
+      color: var(--cinza-700);
+      margin-bottom: 1.1rem;
+    }
+  </style>
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <div class="login-brand-texto">
+        <h1>
+          {% if modo == 'redefinir' %}
+            Criar Nova Senha
+          {% elif modo == 'invalido' %}
+            Link Indisponível
+          {% else %}
+            Recuperar Senha
+          {% endif %}
+        </h1>
+        <p>Controle de Despesas</p>
+      </div>
+    </div>
+
+    {% if erro %}
+    <div class="login-erro">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{{ erro }}</span>
+    </div>
+    {% endif %}
+
+    {% if sucesso %}
+    <div class="login-sucesso">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      <span>{{ sucesso }}</span>
+    </div>
+    {% endif %}
+
+    {% if modo == 'solicitar' %}
+      <p class="reset-descricao">
+        Informe seu <strong>e-mail cadastrado</strong> ou <strong>nome de usuário</strong>.
+        Enviaremos um link temporário de uso único (válido por {{ expira_minutos | default(30) }} minutos) para redefinir sua senha.
+      </p>
+
+      <form method="POST" action="{{ url_for('esqueci_senha') }}" id="form-solicitar">
+        <div class="login-form-grupo">
+          <label for="identificador">E-mail ou Usuário</label>
+          <div class="login-input-wrap">
+            <input
+              type="text"
+              id="identificador"
+              name="identificador"
+              placeholder="Ex: voce@empresa.com ou seu login"
+              autocomplete="username email"
+              required
+              autofocus
+            />
+          </div>
+        </div>
+        <button type="submit" class="btn-login" id="btn-submit-reset">Enviar Link de Recuperação</button>
+      </form>
+
+    {% elif modo == 'redefinir' %}
+      {% if usuario %}
+      <div class="user-chip">
+        Redefinindo senha para <strong>{{ usuario.nome_completo }}</strong> (<code>@{{ usuario.username }}</code>)
+      </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('redefinir_senha_token', token=token) }}" id="form-redefinir">
+        <div class="login-form-grupo">
+          <label for="nova_senha">Nova Senha (mínimo 8 caracteres)</label>
+          <div class="login-input-wrap">
+            <input
+              type="password"
+              id="nova_senha"
+              name="nova_senha"
+              placeholder="Digite a nova senha"
+              minlength="8"
+              autocomplete="new-password"
+              required
+              autofocus
+            />
+          </div>
+        </div>
+
+        <div class="login-form-grupo">
+          <label for="confirmar_senha">Confirmar Nova Senha</label>
+          <div class="login-input-wrap">
+            <input
+              type="password"
+              id="confirmar_senha"
+              name="confirmar_senha"
+              placeholder="Repita a nova senha"
+              minlength="8"
+              autocomplete="new-password"
+              required
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" id="btn-submit-reset">Salvar Nova Senha</button>
+      </form>
+
+    {% else %}
+      <p class="reset-descricao">
+        Por motivos de segurança, os links de redefinição de senha possuem tempo limitado de validade e só podem ser utilizados uma única vez.
+      </p>
+      <a href="{{ url_for('esqueci_senha') }}" class="btn-login">Solicitar Novo Link</a>
+    {% endif %}
+
+    <div class="login-footer">
+      <a href="{{ url_for('login') }}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+        </svg>
+        Voltar para o login
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('form-solicitar') || document.getElementById('form-redefinir');
+    if (form) {
+      form.addEventListener('submit', function () {
+        const btn = document.getElementById('btn-submit-reset');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Processando...';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

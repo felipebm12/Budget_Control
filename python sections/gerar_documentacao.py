@@ -45,7 +45,7 @@ from pdf_fonts import FONT, FONT_BOLD, garantir_fontes
 
 FONTE_DOCX = "Google Sans"
 
-SAIDA_DIR = _DIR_ATUAL if _DIR_ATUAL.name == "Documentation" else _DIR_ATUAL / "Documentation"
+SAIDA_DIR = _DIR_PYTHON.parent / "Documentation"
 VERSAO = "1.53"
 DATA_DOC = date.today().strftime("%d/%m/%Y")
 
@@ -57,6 +57,10 @@ COR_TEXTO = colors.HexColor("#1A1A1A")
 
 ENDPOINTS = [
     ["GET", "/", "Dashboard web principal."],
+    ["GET/POST", "/login", "Autenticação de usuários com rate limiting."],
+    ["GET/POST", "/logout", "Encerra a sessão autenticada."],
+    ["GET/POST", "/esqueci-senha", "Solicita link de redefinição de senha por e-mail ou username."],
+    ["GET/POST", "/redefinir-senha/<token>", "Valida token de uso único e define nova senha."],
     ["GET", "/api/dados", "Consolidado mês a mês (orçado, gasto, saldo, %)."],
     ["GET", "/api/despesas", "Lançamentos filtrados por período e entidades."],
     ["POST", "/api/despesas", "Cadastro de despesa empresarial."],
@@ -72,11 +76,16 @@ ENDPOINTS = [
     ["GET", "/api/orcamentos-setor", "Grade de 12 meses de um setor (query: setor_id, ano)."],
     ["POST", "/api/orcamentos-setor", "Salva teto mensal; aplicar_todos replica os 12 meses."],
     ["GET", "/api/orcamentos-setor/resumo", "Comparativo anual orçado × gasto por setor."],
+    ["GET", "/api/orcamentos-setor/resumo/exportar-pdf", "Exporta resumo anual por setor em PDF."],
+    ["GET", "/api/orcamentos-setor/resumo/exportar-csv", "Exporta resumo anual por setor em CSV."],
     ["GET", "/api/exportar-pdf", "Gera PDF resumido ou detalhado com os filtros ativos."],
+    ["GET", "/api/exportar-csv", "Exporta despesas filtradas em CSV (UTF-8 BOM)."],
     ["POST", "/api/trocar-senha", "Altera a senha do próprio usuário autenticado."],
-    ["GET/POST", "/api/usuarios", "Lista ou cadastra usuários (exclusivo admin)."],
-    ["PUT/DELETE", "/api/usuarios/<id>", "Atualiza ou exclui usuário (exclusivo admin)."],
-    ["PUT", "/api/usuarios/<id>/senha", "Redefine senha de usuário (exclusivo admin)."],
+    ["GET/POST", "/api/usuarios", "Lista ou cadastra usuários com e-mail obrigatório (admin)."],
+    ["PUT/DELETE", "/api/usuarios/<id>", "Atualiza dados/e-mail ou exclui usuário (admin)."],
+    ["PUT", "/api/usuarios/<id>/permissoes", "Configura permissões granulares de usuário (admin)."],
+    ["PUT", "/api/usuarios/<id>/senha", "Redefine manualmente a senha de usuário (admin)."],
+    ["POST", "/api/usuarios/<id>/enviar-link-reset", "Envia Magic Link de redefinição por e-mail (admin)."],
 ]
 
 
@@ -240,19 +249,19 @@ def gerar_pdf(caminho: Path) -> None:
     story.append(Paragraph("3. Arquitetura", styles["h1"]))
     story.append(Paragraph(
         "A aplicação segue uma arquitetura em camadas, sem framework de frontend: HTML, CSS e JavaScript no template, "
-        "API REST no Flask e SQL via psycopg2.",
+        "API REST e autenticação no Flask e SQL via psycopg2.",
         styles["body"],
     ))
     story.append(_tabela(
         ["Camada", "Arquivo / pasta", "Responsabilidade"],
         [
-            ["Apresentação", "templates/index.html + static/css/style.css", "Dashboard, filtros, modais, SweetAlert2."],
-            ["API web", "app.py", "Rotas Flask, validação de payload, download de PDF."],
-            ["Domínio / persistência", "database.py", "CRUD, consolidados, formatação de moeda e status."],
-            ["Relatórios", "report.py", "PDFs resumido e detalhado (ReportLab)."],
-            ["Configuração", "config.py + .env", "Credenciais PostgreSQL e parâmetros do CLI."],
-            ["CLI", "main.py", "Geração de relatório anual via terminal."],
-            ["Banco", "DB scripts/", "Migrações, índices, auditoria e rollback."],
+            ["Apresentação", "templates/index.html, login.html, redefinir_senha.html", "Dashboard, login, recuperação de senha, modais, SweetAlert2."],
+            ["API web & Auth", "app.py", "Rotas Flask, Flask-Login, envio SMTP, rate limiting, exportação PDF/CSV."],
+            ["Domínio / persistência", "database.py", "Pool psycopg2, CRUD, usuários, tokens de recuperação e status."],
+            ["Relatórios", "report.py", "PDFs resumido, detalhado e por setor (ReportLab)."],
+            ["Configuração", "config.py + .env", "Credenciais PostgreSQL, servidor Flask e parâmetros SMTP."],
+            ["CLI", "main.py / reset_senha.py", "Geração de relatório anual e reset emergencial via terminal."],
+            ["Banco", "DB scripts/", "Migrações (add_usuarios.sql, migrationwithupdates.sql), auditoria e rollback."],
             ["Saídas", "Exportações/ e Logs/", "PDFs gerados e arquivos de log."],
         ],
         [3.2 * cm, 5.4 * cm, 8.4 * cm],
@@ -264,12 +273,12 @@ def gerar_pdf(caminho: Path) -> None:
         ["Item", "Tecnologia"],
         [
             ["Linguagem", "Python 3.10 ou superior"],
-            ["Servidor web", "Flask 3+"],
-            ["Banco de dados", "PostgreSQL (Supabase), conexão SSL obrigatória"],
+            ["Servidor web & Auth", "Flask 3+, Flask-Login, bcrypt (cost 12), smtplib/ssl (SMTP)"],
+            ["Banco de dados", "PostgreSQL (Supabase), ThreadedConnectionPool com SSL obrigatório"],
             ["Driver", "psycopg2-binary"],
             ["Ambiente", "python-dotenv (.env)"],
-            ["PDF", "ReportLab 4+"],
-            ["Frontend", "HTML5, CSS3, JavaScript vanilla, SweetAlert2"],
+            ["PDF & Documentos", "ReportLab 4+, python-docx"],
+            ["Frontend", "HTML5, CSS3, JavaScript vanilla, SweetAlert2, html2canvas"],
         ],
         [4.5 * cm, 12.5 * cm],
         styles,
@@ -277,21 +286,23 @@ def gerar_pdf(caminho: Path) -> None:
 
     story.append(Paragraph("5. Modelo de dados", styles["h1"]))
     story.append(Paragraph(
-        "O núcleo relacional combina cadastros mestres, tetos orçamentários e lançamentos. "
+        "O núcleo relacional combina cadastros mestres, tetos orçamentários, lançamentos e controle de acesso. "
         "A tabela <font face='GoogleSans'>rubricas</font> é exposta na interface como <b>Categorias</b>.",
         styles["body"],
     ))
     story.append(_tabela(
         ["Tabela", "Função", "Campos principais"],
         [
-            ["setores", "Centros de custo / departamentos", "id, nome, descricao"],
+            ["setores", "Centros de custo / departamentos", "id, nome, descricao, realiza_compras"],
             ["fornecedores", "Parceiros comerciais", "id, nome, descricao"],
             ["rubricas", "Categorias de despesa", "id, nome, descricao"],
             ["orcamentos_anuais", "Teto anual global (legado / CLI)", "ano, valor_orcado, percentual_alerta"],
             ["orcamentos_mensais", "Rateio mensal do orçamento anual", "orcamento_anual_id, mes (1–12), valor"],
             ["orcamentos_setores", "Teto por setor, ano e mês (usado no dashboard)", "setor_id, ano, mes, valor; UNIQUE(setor, ano, mes)"],
-            ["despesas", "Lançamentos", "descricao, valor, data_compra, setor_id, fornecedor_id, rubrica_id, destino, orcamento_mensal_id"],
+            ["despesas", "Lançamentos", "descricao, valor, data_compra, setor_id, setor_destino_id, fornecedor_id, rubrica_id, destino"],
             ["despesas_auditoria", "Histórico automático", "despesa_id, acao (INSERT/UPDATE/DELETE), JSON anterior/novo, usuario, data_alteracao"],
+            ["usuarios", "Operadores e administradores do sistema", "id, username (UNIQUE), email (UNIQUE), senha_hash (bcrypt), nome_completo, tipo, ativo, permissoes (JSONB)"],
+            ["tokens_recuperacao_senha", "Tokens temporários de uso único para redefinição por e-mail", "id, usuario_id (FK), token_hash (SHA-256), expira_em, usado_em, ip_solicitante"],
         ],
         [3.6 * cm, 5.2 * cm, 8.2 * cm],
         styles,
@@ -300,8 +311,8 @@ def gerar_pdf(caminho: Path) -> None:
     story.append(_bullets([
         "Despesa exige setor e rubrica (NOT NULL).",
         "Valores de despesa e orçamento não podem ser negativos (CHECK).",
-        "Unicidade de orçamento mensal por orçamento anual + mês.",
-        "Índices em data_compra, setor, rubrica e combinações usadas nos filtros.",
+        "Unicidade de orçamento mensal por orçamento anual + mês, bem como username e e-mail únicos em usuarios.",
+        "Índices em data_compra, setor, rubrica, username, e-mail e hash de token de recuperação.",
         "Trigger <font face='GoogleSans'>trg_despesas_auditoria</font> grava INSERT, UPDATE e DELETE em <font face='GoogleSans'>despesas_auditoria</font>.",
         "Exclusão de setor, fornecedor ou categoria é recusada pela aplicação se existirem despesas vinculadas.",
     ], styles))
@@ -309,7 +320,7 @@ def gerar_pdf(caminho: Path) -> None:
     story.append(Paragraph("6. Regras de negócio", styles["h1"]))
     story.append(Paragraph("6.1 Despesas", styles["h2"]))
     story.append(_bullets([
-        "Campos obrigatórios: descrição, valor &gt; 0, data da compra, setor, fornecedor e categoria. Destino é opcional.",
+        "Campos obrigatórios: descrição, valor &gt; 0, data da compra, setor responsável, setor de destino, fornecedor e categoria. Destino é opcional.",
         "Nova despesa abre com campos vazios e data padrão igual ao dia corrente.",
         "Edição usa PUT /api/despesas/&lt;id&gt; com o mesmo conjunto de validações.",
         "Limpar despesas remove todos os lançamentos após dupla confirmação na interface.",
@@ -350,7 +361,8 @@ def gerar_pdf(caminho: Path) -> None:
         ["Grupo", "Ações"],
         [
             ["Lançamentos e cadastros", "Nova despesa; Setores; Fornecedores; Categorias; Orçamento por setor."],
-            ["Relatórios e manutenção", "Exportar PDF; Limpar despesas."],
+            ["Relatórios e manutenção", "Exportar PDF; Exportar CSV; Limpar despesas."],
+            ["Conta e administração", "Trocar minha senha; Gerenciar usuários e permissões (admin); Sair."],
         ],
         [4.5 * cm, 12.5 * cm],
         styles,
@@ -360,13 +372,13 @@ def gerar_pdf(caminho: Path) -> None:
         "<b>Visão resumida:</b> consolidado por mês (orçado, gasto, saldo, % e status).",
         "<b>Visão detalhada:</b> lançamentos individuais, busca textual instantânea, edição e exclusão na coluna Ações. Card de categoria mais custosa no período filtrado.",
         "<b>Período:</b> campos De/Até e atalhos Este Mês (padrão), Mês Anterior, Este Ano, Ano Anterior e Todo o Período.",
-        "<b>Filtros avançados:</b> gaveta com setor, fornecedor e categoria; badge com quantidade ativa; botão Limpar filtros.",
+        "<b>Filtros avançados:</b> gaveta com setor, setor de destino, fornecedor e categoria; badge com quantidade ativa; botão Limpar filtros.",
         "<b>Ordenação:</b> crescente/decrescente, seletor de coluna conforme a visão, e clique nos cabeçalhos da tabela.",
     ], styles))
 
     story.append(Paragraph("8. API REST", styles["h1"]))
     story.append(Paragraph(
-        "Todas as rotas abaixo são servidas pelo processo Flask em <font face='GoogleSans'>app.py</font> (porta 5000 em modo debug).",
+        "Todas as rotas abaixo são servidas pelo processo Flask em <font face='GoogleSans'>app.py</font> (porta 5000 por padrão).",
         styles["body"],
     ))
     story.append(_tabela(
@@ -377,18 +389,18 @@ def gerar_pdf(caminho: Path) -> None:
     ))
     story.append(Paragraph(
         "Filtros comuns de consulta (query string): <font face='GoogleSans'>data_inicio</font>, <font face='GoogleSans'>data_fim</font> "
-        "(AAAA-MM-DD), <font face='GoogleSans'>setor_id</font>, <font face='GoogleSans'>fornecedor_id</font>, "
+        "(AAAA-MM-DD), <font face='GoogleSans'>setor_id</font>, <font face='GoogleSans'>setor_destino_id</font>, <font face='GoogleSans'>fornecedor_id</font>, "
         "<font face='GoogleSans'>categoria_id</font>. Em /api/exportar-pdf, <font face='GoogleSans'>visao=resumida</font> "
         "ou <font face='GoogleSans'>visao=detalhada</font>.",
         styles["body"],
     ))
 
-    story.append(Paragraph("9. Relatórios PDF", styles["h1"]))
+    story.append(Paragraph("9. Relatórios PDF e CSV", styles["h1"]))
     story.append(_bullets([
-        "Arquivos gravados em <font face='GoogleSans'>Exportações/</font> com carimbo de data/hora.",
+        "Gerados dinamicamente em memória (BytesIO) para download imediato pelo navegador.",
         "Resumo: <font face='GoogleSans'>Orcamento_Resumo_AAAAMMDD_HHMMSS.pdf</font> — colunas Mês, Orçado, Gasto, % e Status.",
-        "Detalhado: <font face='GoogleSans'>Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf</font> — lançamentos do período.",
-        "O PDF respeita os mesmos filtros da tela (datas, setor, fornecedor, categoria e visão).",
+        "Detalhado: <font face='GoogleSans'>Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf</font> e <font face='GoogleSans'>.csv</font> — lançamentos do período.",
+        "Resumo por Setor: exportação dedicada em PDF e CSV diretamente na aba de comparativo setorial.",
         "CLI: <font face='GoogleSans'>python main.py --ano 2026 --saida meu_relatorio.pdf</font>.",
     ], styles))
 
@@ -406,35 +418,38 @@ def gerar_pdf(caminho: Path) -> None:
         styles["code"],
     ))
     story.append(Paragraph(
-        "Crie <font face='GoogleSans'>python sections/.env</font> com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD. "
+        "Crie <font face='GoogleSans'>python sections/.env</font> com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD "
+        "(obrigatórios) e, opcionalmente, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, APP_BASE_URL e "
+        "RESET_TOKEN_EXPIRA_MINUTOS para envio de e-mails de redefinição de senha. "
         "A conexão usa <font face='GoogleSans'>sslmode=require</font>. Não versione o arquivo .env.",
         styles["body"],
     ))
 
     story.append(Paragraph("11. Estrutura de pastas", styles["h1"]))
     story.append(Paragraph(
-        "BudgetControl_v1.00/<br/>"
-        "&nbsp;&nbsp;DB scripts/ &nbsp;— inserts, migrationwithupdates.sql, rollbacksec.sql<br/>"
+        "Budget_Control/<br/>"
+        "&nbsp;&nbsp;DB scripts/ &nbsp;— add_usuarios.sql, inserts.sql, migrationwithupdates.sql, rollbacksec.sql<br/>"
         "&nbsp;&nbsp;Documentation/ &nbsp;— este documento (PDF e DOCX)<br/>"
-        "&nbsp;&nbsp;Exportações/ &nbsp;— PDFs gerados pelo sistema<br/>"
+        "&nbsp;&nbsp;Exportações/ &nbsp;— PDFs gerados pelo CLI<br/>"
         "&nbsp;&nbsp;Logs/ &nbsp;— logs de execução<br/>"
-        "&nbsp;&nbsp;python sections/ &nbsp;— app.py, database.py, report.py, main.py, config.py, templates, static",
+        "&nbsp;&nbsp;python sections/ &nbsp;— app.py, database.py, report.py, main.py, reset_senha.py, config.py, templates, static",
         styles["code"],
     ))
 
-    story.append(Paragraph("12. Segurança e operação", styles["h1"]))
+    story.append(Paragraph("12. Segurança, autenticação e recuperação de senha", styles["h1"]))
     story.append(_bullets([
-        "Credenciais somente em variáveis de ambiente; o código encerra se faltar qualquer chave obrigatória.",
-        "A API não implementa autenticação de usuários nesta versão: o dashboard é adequado a rede confiável / uso local.",
-        "Exclusão em massa de despesas é irreversível do ponto de vista da aplicação (há trilha em auditoria enquanto o registro da despesa existir; DELETE dispara a trigger antes da remoção).",
-        "Logs em nível DEBUG no servidor web; o CLI grava arquivo diário em Logs/.",
+        "<b>Autenticação e Sessão:</b> login obrigatório via Flask-Login, senhas com hash bcrypt (cost 12), proteção contra Timing Attack e rate limiting por IP e usuário.",
+        "<b>Recuperação de Senha por E-mail (Magic Link):</b> em <font face='GoogleSans'>/esqueci-senha</font>, o usuário informa seu e-mail ou login. Um token criptográfico (<font face='GoogleSans'>secrets.token_urlsafe(32)</font>) de uso único e validade padrão de 30 minutos é enviado por SMTP, enquanto apenas seu hash SHA-256 é armazenado em <font face='GoogleSans'>tokens_recuperacao_senha</font>.",
+        "<b>Gestão de Usuários e Permissões Granulares:</b> cadastro de operadores exige e-mail único obrigatório; administradores podem configurar permissões individuais por recurso (JSONB), redefinir senhas manualmente ou disparar um Magic Link por e-mail com 1 clique.",
+        "<b>Cabeçalhos e Proteção CSRF:</b> validação de Origin/Referer em mutações HTTP, sanitização contra CSV Formula Injection e cookies HttpOnly/SameSite=Lax.",
+        "<b>Contingência via CLI:</b> script <font face='GoogleSans'>reset_senha.py</font> para recuperação local pelo administrador do servidor.",
     ], styles))
 
     story.append(Paragraph("13. Limitações conhecidas desta versão", styles["h1"]))
     story.append(_bullets([
-        "Sem login, perfis ou multiempresa.",
+        "Sistema single-tenant (uma organização por banco de dados).",
         "Orçamento operacional do dashboard é por setor/mês; o par orcamentos_anuais / orcamentos_mensais permanece no modelo e no CLI.",
-        "Não há fluxo de aprovação de despesas nem conciliação bancária.",
+        "Não há fluxo de aprovação multinível de despesas nem conciliação bancária automática.",
         "A documentação de API é a lista de rotas deste documento; não há OpenAPI publicado.",
     ], styles))
 
@@ -542,12 +557,12 @@ def gerar_docx(caminho: Path) -> None:
     )
     _add_heading(doc, "Objetivos do sistema", 2)
     _add_bullets(doc, [
-        "Registrar despesas com descrição, valor, data, setor, fornecedor, categoria e destino.",
+        "Registrar despesas com descrição, valor, data, setor responsável, setor de destino, fornecedor, categoria e destino.",
         "Definir orçamento mensal por setor e comparar com o gasto real.",
         "Filtrar o dashboard por intervalo de datas, setor, fornecedor e categoria.",
         "Sinalizar execução (dentro, perto ou acima do orçamento) com limite padrão de 80%.",
-        "Exportar PDF na visão resumida (mês a mês) ou detalhada (lançamentos).",
-        "Manter cadastros mestres de setores, fornecedores e categorias, com proteção contra exclusão quando houver lançamentos vinculados.",
+        "Exportar PDF e CSV na visão resumida, detalhada ou por setor.",
+        "Manter cadastros mestres de setores, fornecedores, categorias e usuários com controle granular de permissões.",
     ])
 
     _add_heading(doc, "2. Público e formas de uso", 1)
@@ -561,19 +576,19 @@ def gerar_docx(caminho: Path) -> None:
     _add_heading(doc, "3. Arquitetura", 1)
     _add_p(
         doc,
-        "Camadas: apresentação (HTML/CSS/JS), API REST (Flask), persistência (psycopg2) e relatórios (ReportLab).",
+        "Camadas: apresentação (HTML/CSS/JS), API REST e autenticação (Flask), persistência (psycopg2) e relatórios (ReportLab).",
     )
     _add_table(
         doc,
         ["Camada", "Arquivo / pasta", "Responsabilidade"],
         [
-            ["Apresentação", "templates/index.html + static/css/style.css", "Dashboard, filtros, modais, SweetAlert2."],
-            ["API web", "app.py", "Rotas Flask, validação de payload, download de PDF."],
-            ["Domínio / persistência", "database.py", "CRUD, consolidados, formatação de moeda e status."],
-            ["Relatórios", "report.py", "PDFs resumido e detalhado (ReportLab)."],
-            ["Configuração", "config.py + .env", "Credenciais PostgreSQL e parâmetros do CLI."],
-            ["CLI", "main.py", "Geração de relatório anual via terminal."],
-            ["Banco", "DB scripts/", "Migrações, índices, auditoria e rollback."],
+            ["Apresentação", "templates/index.html, login.html, redefinir_senha.html", "Dashboard, login, recuperação de senha, modais, SweetAlert2."],
+            ["API web & Auth", "app.py", "Rotas Flask, Flask-Login, envio SMTP, rate limiting, exportação PDF/CSV."],
+            ["Domínio / persistência", "database.py", "Pool psycopg2, CRUD, usuários, tokens de recuperação e status."],
+            ["Relatórios", "report.py", "PDFs resumido, detalhado e por setor (ReportLab)."],
+            ["Configuração", "config.py + .env", "Credenciais PostgreSQL, servidor Flask e parâmetros SMTP."],
+            ["CLI", "main.py / reset_senha.py", "Geração de relatório anual e reset emergencial via terminal."],
+            ["Banco", "DB scripts/", "Migrações (add_usuarios.sql, migrationwithupdates.sql), auditoria e rollback."],
             ["Saídas", "Exportações/ e Logs/", "PDFs gerados e arquivos de log."],
         ],
     )
@@ -584,41 +599,43 @@ def gerar_docx(caminho: Path) -> None:
         ["Item", "Tecnologia"],
         [
             ["Linguagem", "Python 3.10 ou superior"],
-            ["Servidor web", "Flask 3+"],
-            ["Banco de dados", "PostgreSQL (Supabase), conexão SSL obrigatória"],
+            ["Servidor web & Auth", "Flask 3+, Flask-Login, bcrypt (cost 12), smtplib/ssl (SMTP)"],
+            ["Banco de dados", "PostgreSQL (Supabase), ThreadedConnectionPool com SSL obrigatório"],
             ["Driver", "psycopg2-binary"],
             ["Ambiente", "python-dotenv (.env)"],
-            ["PDF", "ReportLab 4+"],
-            ["Frontend", "HTML5, CSS3, JavaScript vanilla, SweetAlert2"],
+            ["PDF & Documentos", "ReportLab 4+, python-docx"],
+            ["Frontend", "HTML5, CSS3, JavaScript vanilla, SweetAlert2, html2canvas"],
         ],
     )
 
     _add_heading(doc, "5. Modelo de dados", 1)
     _add_p(
         doc,
-        "O núcleo relacional combina cadastros mestres, tetos orçamentários e lançamentos. "
+        "O núcleo relacional combina cadastros mestres, tetos orçamentários, lançamentos e controle de acesso. "
         "A tabela rubricas é exposta na interface como Categorias.",
     )
     _add_table(
         doc,
         ["Tabela", "Função", "Campos principais"],
         [
-            ["setores", "Centros de custo / departamentos", "id, nome, descricao"],
+            ["setores", "Centros de custo / departamentos", "id, nome, descricao, realiza_compras"],
             ["fornecedores", "Parceiros comerciais", "id, nome, descricao"],
             ["rubricas", "Categorias de despesa", "id, nome, descricao"],
             ["orcamentos_anuais", "Teto anual global (legado / CLI)", "ano, valor_orcado, percentual_alerta"],
             ["orcamentos_mensais", "Rateio mensal do orçamento anual", "orcamento_anual_id, mes (1–12), valor"],
             ["orcamentos_setores", "Teto por setor, ano e mês (dashboard)", "setor_id, ano, mes, valor; UNIQUE(setor, ano, mes)"],
-            ["despesas", "Lançamentos", "descricao, valor, data_compra, setor_id, fornecedor_id, rubrica_id, destino"],
+            ["despesas", "Lançamentos", "descricao, valor, data_compra, setor_id, setor_destino_id, fornecedor_id, rubrica_id, destino"],
             ["despesas_auditoria", "Histórico automático", "acao INSERT/UPDATE/DELETE, JSON, usuario, data_alteracao"],
+            ["usuarios", "Operadores e administradores do sistema", "id, username (UNIQUE), email (UNIQUE), senha_hash (bcrypt), nome_completo, tipo, ativo, permissoes (JSONB)"],
+            ["tokens_recuperacao_senha", "Tokens temporários de uso único para redefinição por e-mail", "id, usuario_id (FK), token_hash (SHA-256), expira_em, usado_em, ip_solicitante"],
         ],
     )
     _add_heading(doc, "Regras de integridade", 2)
     _add_bullets(doc, [
         "Despesa exige setor e rubrica (NOT NULL).",
         "Valores de despesa e orçamento não podem ser negativos (CHECK).",
-        "Unicidade de orçamento mensal por orçamento anual + mês.",
-        "Índices em data_compra, setor, rubrica e combinações usadas nos filtros.",
+        "Unicidade de orçamento mensal por orçamento anual + mês, bem como username e e-mail únicos em usuarios.",
+        "Índices em data_compra, setor, rubrica, username, e-mail e hash de token de recuperação.",
         "Trigger trg_despesas_auditoria registra alterações em despesas_auditoria.",
         "Exclusão de setor, fornecedor ou categoria é recusada se existirem despesas vinculadas.",
     ])
@@ -626,7 +643,7 @@ def gerar_docx(caminho: Path) -> None:
     _add_heading(doc, "6. Regras de negócio", 1)
     _add_heading(doc, "6.1 Despesas", 2)
     _add_bullets(doc, [
-        "Campos obrigatórios: descrição, valor maior que zero, data da compra, setor, fornecedor e categoria. Destino é opcional.",
+        "Campos obrigatórios: descrição, valor maior que zero, data da compra, setor responsável, setor de destino, fornecedor e categoria. Destino é opcional.",
         "Nova despesa abre com campos vazios e data padrão igual ao dia corrente.",
         "Edição usa PUT /api/despesas/<id> com as mesmas validações.",
         "Limpar despesas remove todos os lançamentos após dupla confirmação na interface.",
@@ -663,7 +680,8 @@ def gerar_docx(caminho: Path) -> None:
         ["Grupo", "Ações"],
         [
             ["Lançamentos e cadastros", "Nova despesa; Setores; Fornecedores; Categorias; Orçamento por setor."],
-            ["Relatórios e manutenção", "Exportar PDF; Limpar despesas."],
+            ["Relatórios e manutenção", "Exportar PDF; Exportar CSV; Limpar despesas."],
+            ["Conta e administração", "Trocar minha senha; Gerenciar usuários e permissões (admin); Sair."],
         ],
     )
     _add_heading(doc, "Visões e filtros", 2)
@@ -671,25 +689,25 @@ def gerar_docx(caminho: Path) -> None:
         "Visão resumida: consolidado por mês (orçado, gasto, saldo, % e status).",
         "Visão detalhada: lançamentos individuais, busca textual, edição e exclusão. Card de categoria mais custosa.",
         "Período: De/Até e atalhos Este Mês (padrão), Mês Anterior, Este Ano, Ano Anterior e Todo o Período.",
-        "Filtros avançados: setor, fornecedor e categoria; badge de quantidade ativa; limpar filtros.",
+        "Filtros avançados: setor, setor de destino, fornecedor e categoria; badge de quantidade ativa; limpar filtros.",
         "Ordenação crescente/decrescente por coluna, também pelos cabeçalhos da tabela.",
     ])
 
     _add_heading(doc, "8. API REST", 1)
-    _add_p(doc, "Rotas servidas por app.py na porta 5000 (modo debug).")
+    _add_p(doc, "Rotas servidas por app.py na porta 5000 (por padrão).")
     _add_table(doc, ["Método", "Rota", "Descrição"], ENDPOINTS)
     _add_p(
         doc,
-        "Filtros comuns: data_inicio, data_fim (AAAA-MM-DD), setor_id, fornecedor_id, categoria_id. "
+        "Filtros comuns: data_inicio, data_fim (AAAA-MM-DD), setor_id, setor_destino_id, fornecedor_id, categoria_id. "
         "Em /api/exportar-pdf use visao=resumida ou visao=detalhada.",
     )
 
-    _add_heading(doc, "9. Relatórios PDF", 1)
+    _add_heading(doc, "9. Relatórios PDF e CSV", 1)
     _add_bullets(doc, [
-        "Arquivos gravados em Exportações/ com carimbo de data/hora.",
+        "Gerados dinamicamente em memória (BytesIO) para download imediato pelo navegador.",
         "Resumo: Orcamento_Resumo_AAAAMMDD_HHMMSS.pdf.",
-        "Detalhado: Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf.",
-        "O PDF respeita os filtros da tela.",
+        "Detalhado: Despesas_Empresariais_AAAAMMDD_HHMMSS.pdf e .csv.",
+        "Resumo por Setor: exportação dedicada em PDF e CSV na aba de comparativo setorial.",
         "CLI: python main.py --ano 2026 --saida meu_relatorio.pdf",
     ])
 
@@ -698,32 +716,35 @@ def gerar_docx(caminho: Path) -> None:
         doc,
         "Pré-requisitos: Python 3.10+ e PostgreSQL (Supabase ou local). No diretório python sections: "
         "criar venv, pip install -r requirements.txt e python app.py. "
-        "Crie python sections/.env com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD. "
+        "Crie python sections/.env com DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD (obrigatórios) e, "
+        "opcionalmente, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, APP_BASE_URL e "
+        "RESET_TOKEN_EXPIRA_MINUTOS para envio de e-mails de redefinição de senha. "
         "A conexão usa sslmode=require. Não versione o .env.",
     )
 
     _add_heading(doc, "11. Estrutura de pastas", 1)
     _add_bullets(doc, [
-        "DB scripts/ — inserts, migrationwithupdates.sql, rollbacksec.sql",
+        "DB scripts/ — add_usuarios.sql, inserts.sql, migrationwithupdates.sql, rollbacksec.sql",
         "Documentation/ — este documento (PDF e DOCX)",
-        "Exportações/ — PDFs gerados pelo sistema",
+        "Exportações/ — PDFs gerados pelo CLI",
         "Logs/ — logs de execução",
-        "python sections/ — app.py, database.py, report.py, main.py, config.py, templates, static",
+        "python sections/ — app.py, database.py, report.py, main.py, reset_senha.py, config.py, templates, static",
     ])
 
-    _add_heading(doc, "12. Segurança e operação", 1)
+    _add_heading(doc, "12. Segurança, autenticação e recuperação de senha", 1)
     _add_bullets(doc, [
-        "Credenciais somente em variáveis de ambiente; o código encerra se faltar chave obrigatória.",
-        "Esta versão não tem autenticação de usuários: o dashboard é adequado a rede confiável ou uso local.",
-        "Exclusão em massa de despesas é irreversível na interface.",
-        "Logs em DEBUG no servidor web; o CLI grava arquivo diário em Logs/.",
+        "Autenticação e Sessão: login obrigatório via Flask-Login, senhas com hash bcrypt (cost 12), proteção contra Timing Attack e rate limiting por IP e usuário.",
+        "Recuperação de Senha por E-mail (Magic Link): em /esqueci-senha, o usuário informa seu e-mail ou login. Um token criptográfico (secrets.token_urlsafe(32)) de uso único e validade padrão de 30 minutos é enviado por SMTP, enquanto apenas seu hash SHA-256 é armazenado em tokens_recuperacao_senha.",
+        "Gestão de Usuários e Permissões Granulares: cadastro de operadores exige e-mail único obrigatório; administradores podem configurar permissões individuais por recurso (JSONB), redefinir senhas manualmente ou disparar um Magic Link por e-mail com 1 clique.",
+        "Cabeçalhos e Proteção CSRF: validação de Origin/Referer em mutações HTTP, sanitização contra CSV Formula Injection e cookies HttpOnly/SameSite=Lax.",
+        "Contingência via CLI: script reset_senha.py para recuperação local pelo administrador do servidor.",
     ])
 
     _add_heading(doc, "13. Limitações conhecidas desta versão", 1)
     _add_bullets(doc, [
-        "Sem login, perfis ou multiempresa.",
+        "Sistema single-tenant (uma organização por banco de dados).",
         "O orçamento operacional do dashboard é por setor/mês; orcamentos_anuais e orcamentos_mensais permanecem no modelo e no CLI.",
-        "Não há aprovação de despesas nem conciliação bancária.",
+        "Não há aprovação multinível de despesas nem conciliação bancária automática.",
         "Não há especificação OpenAPI publicada.",
     ])
 

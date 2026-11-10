@@ -1,10 +1,14 @@
 import csv
+import html
 import io
 import logging
 import math
 import os
+import smtplib
+import ssl
 import threading
 import time
+from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
 from datetime import date, datetime, timedelta
@@ -111,7 +115,11 @@ def _aplicar_headers_seguranca(response):
 
     if request.path.startswith("/fonts/") or request.path == "/favicon.ico" or request.path.startswith("/static/"):
         response.headers.setdefault("Cache-Control", "public, max-age=604800, immutable")
-    elif request.path.startswith("/api/") or request.path == "/":
+    elif (
+        request.path.startswith("/api/")
+        or request.path in ("/", "/login", "/esqueci-senha")
+        or request.path.startswith("/redefinir-senha/")
+    ):
         response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         response.headers.setdefault("Pragma", "no-cache")
 
@@ -132,6 +140,7 @@ class Usuario(UserMixin):
         self.id = str(data["id"])
         self.username = data["username"]
         self.nome_completo = data["nome_completo"]
+        self.email = data.get("email", "")
         self.tipo = data["tipo"]
         self.permissoes = database.normalizar_permissoes(data.get("permissoes"), self.tipo)
 
@@ -154,6 +163,141 @@ def load_user(user_id: str):
     return None
 
 
+# ── Envio de E-mail de Recuperação de Senha (SMTP + Fallback Dev) ────────────
+
+def _montar_url_reset_senha(token: str) -> str:
+    """Constrói a URL absoluta para o link de redefinição de senha."""
+    caminho = url_for("redefinir_senha_token", token=token)
+    if config.APP_BASE_URL:
+        return f"{config.APP_BASE_URL}{caminho}"
+    return url_for("redefinir_senha_token", token=token, _external=True)
+
+
+def _enviar_email_recuperacao_senha(
+    destinatario_email: str,
+    nome_usuario: str,
+    username: str,
+    link_reset: str,
+    expira_minutos: int,
+) -> bool:
+    """
+    Envia o e-mail de redefinição de senha via SMTP configurado no .env.
+    Caso SMTP_HOST não esteja configurado (ambiente de desenvolvimento), registra o link no log.
+    """
+    assunto = "Redefinição de Senha — Controle de Despesas"
+    nome_seguro = html.escape(nome_usuario or username)
+    user_seguro = html.escape(username)
+    link_seguro = html.escape(link_reset, quote=True)
+
+    corpo_texto = (
+        f"Olá, {nome_usuario or username} (@{username})!\n\n"
+        f"Recebemos uma solicitação para redefinir a senha da sua conta no Controle de Despesas.\n\n"
+        f"Para criar uma nova senha, acesse o link abaixo (válido por {expira_minutos} minutos e de uso único):\n"
+        f"{link_reset}\n\n"
+        f"Se você não solicitou esta alteração, ignore este e-mail com segurança. Sua senha atual permanecerá ativa.\n"
+    )
+
+    corpo_html = f"""\
+<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="margin:0; padding:0; background-color:#f4f4f5; font-family:Arial, Helvetica, sans-serif; color:#18181b;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px; background:#ffffff; border-radius:12px; padding:32px; border:1px solid #e4e4e7;">
+          <tr>
+            <td>
+              <h2 style="margin:0 0 12px 0; font-size:20px; color:#09090b;">Redefinição de Senha</h2>
+              <p style="margin:0 0 16px 0; font-size:14px; line-height:1.6; color:#3f3f46;">
+                Olá, <strong>{nome_seguro}</strong> (usuário: <code>{user_seguro}</code>),
+              </p>
+              <p style="margin:0 0 24px 0; font-size:14px; line-height:1.6; color:#3f3f46;">
+                Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Controle de Despesas</strong>.
+                Clique no botão abaixo para definir uma nova senha:
+              </p>
+              <p style="text-align:center; margin:0 0 24px 0;">
+                <a href="{link_seguro}" style="display:inline-block; background:#09090b; color:#ffffff; text-decoration:none; font-weight:700; font-size:14px; padding:12px 28px; border-radius:8px;">
+                  Redefinir Minha Senha
+                </a>
+              </p>
+              <p style="margin:0 0 12px 0; font-size:12px; line-height:1.5; color:#71717a;">
+                Este link é de <strong>uso único</strong> e expira em <strong>{expira_minutos} minutos</strong>.
+                Caso o botão não funcione, copie e cole o endereço abaixo no navegador:
+              </p>
+              <p style="margin:0 0 20px 0; font-size:12px; word-break:break-all; color:#2563eb;">
+                {link_seguro}
+              </p>
+              <hr style="border:none; border-top:1px solid #e4e4e7; margin:20px 0;" />
+              <p style="margin:0; font-size:12px; color:#71717a;">
+                Se você não solicitou a redefinição de senha, nenhuma ação é necessária — sua senha atual permanece protegida.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+    if not config.SMTP_HOST:
+        log.warning(
+            "========================================================================\n"
+            f"[MODO DEV / SMTP NÃO CONFIGURADO] Link de recuperação para '{username}' ({destinatario_email}):\n"
+            f"  -> {link_reset}\n"
+            "  Configure SMTP_HOST, SMTP_PORT, SMTP_USER e SMTP_PASSWORD no .env para envio real por e-mail.\n"
+            "========================================================================"
+        )
+        return True
+
+    msg = EmailMessage()
+    msg["Subject"] = assunto
+    msg["From"] = config.SMTP_FROM
+    msg["To"] = destinatario_email
+    msg.set_content(corpo_texto)
+    msg.add_alternative(corpo_html, subtype="html")
+
+    try:
+        contexto_ssl = ssl.create_default_context()
+        if config.SMTP_USE_SSL:
+            with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15, context=contexto_ssl) as server:
+                if config.SMTP_USER and config.SMTP_PASSWORD:
+                    server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as server:
+                server.ehlo()
+                if config.SMTP_USE_TLS:
+                    server.starttls(context=contexto_ssl)
+                    server.ehlo()
+                if config.SMTP_USER and config.SMTP_PASSWORD:
+                    server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                server.send_message(msg)
+
+        log.info(f"E-mail de recuperação de senha enviado para '{destinatario_email}' (usuário: {username})")
+        return True
+    except Exception as e:
+        log.error(f"Falha ao enviar e-mail SMTP para '{destinatario_email}': {e}")
+        return False
+
+
+def _disparar_email_recuperacao_async(dados_token: dict, link_reset: str) -> None:
+    """Envia o e-mail em background thread para evitar Timing Attack e não travar a requisição HTTP."""
+    threading.Thread(
+        target=_enviar_email_recuperacao_senha,
+        args=(
+            dados_token["email"],
+            dados_token["nome_completo"],
+            dados_token["username"],
+            link_reset,
+            dados_token["expira_minutos"],
+        ),
+        daemon=True,
+        name=f"reset-mail-{dados_token['username']}",
+    ).start()
+
+
 # ── Rotas de Autenticação ────────────────────────────────────────────────────
 
 @app.route("/login", methods=["GET", "POST"])
@@ -163,10 +307,13 @@ def login():
         return redirect(url_for("index"))
 
     erro = None
+    sucesso = None
     if request.method == "GET":
         # Pré-aquece o pool no worker atual do Gunicorn enquanto o usuário digita a senha
         database.preaquecer_pool_async()
-        return render_template("login.html", erro=erro)
+        if request.args.get("reset") == "1":
+            sucesso = "Sua senha foi redefinida com sucesso! Faça login com a nova senha."
+        return render_template("login.html", erro=erro, sucesso=sucesso)
 
     try:
         ip_cliente = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()) or request.remote_addr or "unknown"
@@ -211,6 +358,168 @@ def login():
         erro = "Falha temporária de conexão. Tente novamente em instantes."
 
     return render_template("login.html", erro=erro)
+
+
+@app.route("/esqueci-senha", methods=["GET", "POST"])
+def esqueci_senha():
+    """Solicitação de link de redefinição de senha por e-mail ou nome de usuário."""
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    if request.method == "GET":
+        return render_template(
+            "redefinir_senha.html",
+            modo="solicitar",
+            erro=None,
+            sucesso=None,
+            expira_minutos=config.RESET_TOKEN_EXPIRA_MINUTOS,
+        )
+
+    ip_cliente = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()) or request.remote_addr or "unknown"
+    identificador = (request.form.get("identificador") or "").strip()
+    ident_key = identificador.lower()
+
+    if not identificador:
+        return render_template(
+            "redefinir_senha.html",
+            modo="solicitar",
+            erro="Informe seu e-mail ou nome de usuário.",
+            sucesso=None,
+            expira_minutos=config.RESET_TOKEN_EXPIRA_MINUTOS,
+        ), 400
+
+    chave_rl_ip = f"forgot_ip:{ip_cliente}"
+    chave_rl_id = f"forgot_id:{ident_key}"
+
+    if not _verificar_rate_limit(chave_rl_ip, max_tentativas=5, janela_segundos=300) or not _verificar_rate_limit(
+        chave_rl_id, max_tentativas=3, janela_segundos=300
+    ):
+        return render_template(
+            "redefinir_senha.html",
+            modo="solicitar",
+            erro="Muitas solicitações recentes. Aguarde alguns minutos antes de tentar novamente.",
+            sucesso=None,
+            expira_minutos=config.RESET_TOKEN_EXPIRA_MINUTOS,
+        ), 429
+
+    try:
+        dados_token = database.criar_token_recuperacao_senha(
+            identificador=identificador,
+            ip_solicitante=ip_cliente,
+            minutos_validade=config.RESET_TOKEN_EXPIRA_MINUTOS,
+        )
+        if dados_token:
+            link_reset = _montar_url_reset_senha(dados_token["token"])
+            _disparar_email_recuperacao_async(dados_token, link_reset)
+        else:
+            # Mitiga enumeração de conta por tempo de resposta
+            database.verificar_senha_dummy(identificador)
+    except Exception as e:
+        log.error(f"Erro ao processar solicitação de recuperação de senha: {e}")
+
+    mensagem_padrao = (
+        f"Se houver uma conta ativa associada aos dados informados com e-mail cadastrado, "
+        f"você receberá um link de redefinição válido por {config.RESET_TOKEN_EXPIRA_MINUTOS} minutos."
+    )
+    return render_template(
+        "redefinir_senha.html",
+        modo="solicitar",
+        erro=None,
+        sucesso=mensagem_padrao,
+        expira_minutos=config.RESET_TOKEN_EXPIRA_MINUTOS,
+    )
+
+
+@app.route("/redefinir-senha/<token>", methods=["GET", "POST"])
+def redefinir_senha_token(token: str):
+    """Valida o token temporário do link de e-mail e permite definir uma nova senha."""
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
+    ip_cliente = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()) or request.remote_addr or "unknown"
+    chave_rl_ip = f"reset_token_ip:{ip_cliente}"
+
+    if request.method == "GET":
+        if not _verificar_rate_limit(chave_rl_ip, max_tentativas=15, janela_segundos=300):
+            return render_template(
+                "redefinir_senha.html",
+                modo="invalido",
+                erro="Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+            ), 429
+
+        dados_token = database.validar_token_recuperacao_senha(token)
+        if not dados_token:
+            return render_template(
+                "redefinir_senha.html",
+                modo="invalido",
+                erro="Este link de redefinição é inválido, já foi utilizado ou expirou.",
+            ), 400
+
+        return render_template(
+            "redefinir_senha.html",
+            modo="redefinir",
+            token=token,
+            usuario=dados_token,
+            erro=None,
+        )
+
+    # POST: submissão da nova senha
+    if not _verificar_rate_limit(chave_rl_ip, max_tentativas=8, janela_segundos=300):
+        return render_template(
+            "redefinir_senha.html",
+            modo="invalido",
+            erro="Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+        ), 429
+
+    nova_senha = request.form.get("nova_senha") or ""
+    confirmar = request.form.get("confirmar_senha") or ""
+
+    dados_token = database.validar_token_recuperacao_senha(token)
+    if not dados_token:
+        return render_template(
+            "redefinir_senha.html",
+            modo="invalido",
+            erro="Este link de redefinição é inválido, já foi utilizado ou expirou.",
+        ), 400
+
+    if not nova_senha or len(nova_senha) < 8:
+        return render_template(
+            "redefinir_senha.html",
+            modo="redefinir",
+            token=token,
+            usuario=dados_token,
+            erro="A nova senha deve ter pelo menos 8 caracteres.",
+        ), 400
+
+    if nova_senha != confirmar:
+        return render_template(
+            "redefinir_senha.html",
+            modo="redefinir",
+            token=token,
+            usuario=dados_token,
+            erro="A nova senha e a confirmação não conferem.",
+        ), 400
+
+    try:
+        resultado = database.consumir_token_e_redefinir_senha(token, nova_senha)
+        _limpar_rate_limit(chave_rl_ip)
+        log.info(f"Senha redefinida via link de e-mail para o usuário: {resultado['username']}")
+        return redirect(url_for("login", reset="1"))
+    except ValueError as ve:
+        return render_template(
+            "redefinir_senha.html",
+            modo="invalido",
+            erro=str(ve),
+        ), 400
+    except Exception as e:
+        log.error(f"Erro interno ao redefinir senha com token: {e}")
+        return render_template(
+            "redefinir_senha.html",
+            modo="redefinir",
+            token=token,
+            usuario=dados_token,
+            erro="Erro interno ao salvar a nova senha. Tente novamente.",
+        ), 500
 
 
 @app.route("/logout", methods=["GET", "POST"])
@@ -305,14 +614,22 @@ def api_cadastrar_usuario():
     """Cadastra um novo usuário no sistema."""
     dados = request.get_json() or {}
     username = dados.get("username", "")
+    email = dados.get("email", "")
     senha = dados.get("senha", "")
     nome_completo = dados.get("nome_completo", "")
     tipo = dados.get("tipo", "usuario")
     permissoes = dados.get("permissoes")
 
     try:
-        novo = database.cadastrar_usuario(username, senha, nome_completo, tipo, permissoes=permissoes)
-        log.info(f"Usuário criado por {current_user.username}: {novo['username']} ({novo['tipo']})")
+        novo = database.cadastrar_usuario(
+            username,
+            senha,
+            nome_completo,
+            tipo,
+            permissoes=permissoes,
+            email=email,
+        )
+        log.info(f"Usuário criado por {current_user.username}: {novo['username']} ({novo['tipo']}) - {novo['email']}")
         return jsonify({"sucesso": True, "usuario": novo, "mensagem": f"Usuário '{novo['username']}' cadastrado com sucesso!"}), 201
     except ValueError as ve:
         return jsonify({"erro": str(ve)}), 400
@@ -325,9 +642,10 @@ def api_cadastrar_usuario():
 @login_required
 @admin_required
 def api_atualizar_usuario(user_id: int):
-    """Atualiza dados do usuário (nome, perfil, status ativo/inativo e permissões)."""
+    """Atualiza dados do usuário (nome, e-mail, perfil, status ativo/inativo e permissões)."""
     dados = request.get_json() or {}
     nome_completo = dados.get("nome_completo", "")
+    email = dados.get("email")
     tipo = dados.get("tipo", "usuario")
     ativo = bool(dados.get("ativo", True))
     permissoes = dados.get("permissoes")
@@ -340,6 +658,7 @@ def api_atualizar_usuario(user_id: int):
             ativo,
             int(current_user.id),
             permissoes=permissoes,
+            email=email,
         )
         log.info(f"Usuário ID={user_id} atualizado por {current_user.username}: {atualizado['username']}")
         return jsonify({"sucesso": True, "usuario": atualizado, "mensagem": "Usuário atualizado com sucesso!"})
@@ -398,6 +717,48 @@ def api_redefinir_senha_usuario(user_id: int):
     except Exception as e:
         log.error(f"Erro ao redefinir senha do usuário ID={user_id}: {e}")
         return jsonify({"erro": "Falha interna ao redefinir senha."}), 500
+
+
+@app.route("/api/usuarios/<int:user_id>/enviar-link-reset", methods=["POST"])
+@login_required
+@admin_required
+def api_enviar_link_reset_usuario(user_id: int):
+    """Gera e envia por e-mail um link de redefinição de senha para o usuário selecionado."""
+    try:
+        usuario = database.buscar_usuario_por_username_por_id(user_id)
+        if not usuario:
+            return jsonify({"erro": "Usuário não encontrado ou inativo."}), 404
+        if not usuario.get("email"):
+            return jsonify({"erro": f"O usuário '{usuario['username']}' ainda não possui um e-mail cadastrado."}), 400
+
+        ip_cliente = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()) or request.remote_addr or "unknown"
+        dados_token = database.criar_token_recuperacao_senha(
+            identificador=usuario["email"],
+            ip_solicitante=ip_cliente,
+            minutos_validade=config.RESET_TOKEN_EXPIRA_MINUTOS,
+        )
+        if not dados_token:
+            return jsonify({"erro": "Não foi possível gerar o token de recuperação."}), 500
+
+        link_reset = _montar_url_reset_senha(dados_token["token"])
+        enviado = _enviar_email_recuperacao_senha(
+            dados_token["email"],
+            dados_token["nome_completo"],
+            dados_token["username"],
+            link_reset,
+            dados_token["expira_minutos"],
+        )
+        if not enviado:
+            return jsonify({"erro": "Falha ao enviar o e-mail via servidor SMTP. Verifique as configurações no .env."}), 500
+
+        aviso_dev = "" if config.SMTP_HOST else " (Modo Dev: link registrado no console do servidor)"
+        return jsonify({
+            "sucesso": True,
+            "mensagem": f"Link de redefinição enviado para {dados_token['email']}{aviso_dev}!"
+        })
+    except Exception as e:
+        log.error(f"Erro ao enviar link de reset para usuário ID={user_id}: {e}")
+        return jsonify({"erro": "Falha interna ao disparar link de recuperação."}), 500
 
 
 @app.route("/api/usuarios/<int:user_id>", methods=["DELETE"])

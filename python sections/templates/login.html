@@ -154,8 +154,48 @@
       margin-bottom: 1.1rem;
     }
 
-    .login-erro svg {
+    .login-erro svg,
+    .login-sucesso svg {
       flex-shrink: 0;
+    }
+
+    .login-sucesso {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #6ee7b7;
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.84rem;
+      font-weight: 500;
+      margin-bottom: 1.1rem;
+      line-height: 1.4;
+    }
+
+    .login-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
+    }
+
+    .login-label-row label {
+      margin-bottom: 0;
+    }
+
+    .link-esqueci-senha {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--cinza-600);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .link-esqueci-senha:hover {
+      color: var(--primaria);
+      text-decoration: underline;
     }
 
     /* ── Botão entrar ───────────────────────────────────────────────── */
@@ -197,17 +237,19 @@
 
     .login-ajuda {
       margin-top: 0.7rem;
-      font-size: 0.72rem;
-      color: var(--cinza-400);
+      font-size: 0.76rem;
+      color: var(--cinza-500);
       line-height: 1.45;
     }
 
-    .login-ajuda code {
-      font-size: 0.7rem;
-      background: var(--cinza-100);
-      padding: 0.12rem 0.35rem;
-      border-radius: 4px;
-      color: var(--cinza-700);
+    .login-ajuda a {
+      color: var(--primaria);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .login-ajuda a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -228,6 +270,17 @@
         <p>Sistema de Controle Orçamentário</p>
       </div>
     </div>
+
+    <!-- Mensagem de sucesso (pós-redefinição de senha) -->
+    {% if sucesso %}
+    <div class="login-sucesso" id="msg-sucesso">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      <span>{{ sucesso }}</span>
+    </div>
+    {% endif %}
 
     <!-- Mensagem de erro (server-side) -->
     {% if erro %}
@@ -258,7 +311,10 @@
       </div>
 
       <div class="login-form-grupo">
-        <label for="senha">Senha</label>
+        <div class="login-label-row">
+          <label for="senha">Senha</label>
+          <a href="{{ url_for('esqueci_senha') }}" class="link-esqueci-senha">Esqueceu a senha?</a>
+        </div>
         <div class="login-input-wrap">
           <input
             type="password"
@@ -293,7 +349,7 @@
     <div class="login-footer">
       Controle de Despesas &nbsp;·&nbsp; Acesso restrito
       <p class="login-ajuda">
-        Esqueceu a senha de login? Se não tiver as manhas, não entra não.
+        Problemas no acesso? <a href="{{ url_for('esqueci_senha') }}">Receber link de redefinição por e-mail</a>
       </p>
     </div>
   </div>
